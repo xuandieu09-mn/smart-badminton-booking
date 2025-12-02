@@ -1,0 +1,59 @@
+// File: prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(CUSTOMER)
+  
+  // 1 user có nhiều bookings
+  bookings  Booking[] 
+  
+  createdAt DateTime @default(now())
+}
+
+model Court {
+  id           Int       @id @default(autoincrement())
+  name         String
+  description  String?
+  pricePerHour Decimal   @default(50000)
+  isActive     Boolean   @default(true)
+  
+  // 1 court có nhiều bookings
+  bookings     Booking[]
+  
+  createdAt    DateTime  @default(now())
+}
+
+model Booking {
+  id        Int      @id @default(autoincrement())
+  courtId   Int
+  userId    Int
+  
+  startTime DateTime
+  endTime   DateTime
+  
+  totalPrice Decimal
+  status     String   @default("PENDING")
+  
+  // Ở đây không cần sửa, nhưng nhờ 2 dòng bên trên, Prisma sẽ hiểu quan hệ là 1-N
+  court     Court    @relation(fields: [courtId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+}
