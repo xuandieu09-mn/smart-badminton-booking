@@ -1,0 +1,182 @@
+## 🎯 Mục tiêu
+Xây dựng hệ thống phân quyền dựa trên vai trò (CUSTOMER, STAFF, ADMIN) với Guards và Decorators.
+
+## ✅ Checklist
+
+### 1. Tạo JWT Auth Guard
+
+**File: `src/common/guards/jwt-auth.guard.ts`**
+```typescript
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {}
+```
+
+### 2. Tạo Roles Decorator
+
+**File: `src/common/decorators/roles.decorator.ts`**
+```typescript
+import { SetMetadata } from '@nestjs/common';
+import { Role } from '@prisma/client';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+```
+
+### 3. Tạo Current User Decorator
+
+**File: `src/common/decorators/current-user.decorator.ts`**
+```typescript
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+
+export const CurrentUser = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;
+  },
+);
+```
+
+### 4. Tạo Roles Guard
+
+**File: `src/common/guards/roles.guard.ts`**
+```typescript
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Role } from '@prisma/client';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    
+    if (!requiredRoles) {
+      return true;
+    }
+    
+    const { user } = context.switchToHttp().getRequest();
+    return requiredRoles.some((role) => user.role === role);
+  }
+}
+```
+
+### 5. Tạo Users Module để test
+
+```bash
+nest g module modules/users
+nest g service modules/users
+nest g controller modules/users
+```
+
+**File: `src/modules/users/users.controller.ts`**
+```typescript
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Role } from '@prisma/client';
+
+@Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class UsersController {
+  
+  @Get('profile')
+  getProfile(@CurrentUser() user: any) {
+    return {
+      message: 'This is your profile',
+      user,
+    };
+  }
+
+  @Get('admin-only')
+  @Roles(Role.ADMIN)
+  adminOnly(@CurrentUser() user: any) {
+    return {
+      message: 'Welcome Admin!',
+      user,
+    };
+  }
+
+  @Get('staff-or-admin')
+  @Roles(Role.STAFF, Role.ADMIN)
+  staffOrAdmin(@CurrentUser() user: any) {
+    return {
+      message: 'Staff or Admin area',
+      user,
+    };
+  }
+}
+```
+
+### 6. Import UsersModule vào AppModule
+
+```typescript
+// src/app.module.ts
+imports: [
+  ConfigModule.forRoot({ isGlobal: true }),
+  PrismaModule,
+  AuthModule,
+  UsersModule, // ← Thêm
+],
+```
+
+## 🧪 Test RBAC
+
+### 1. Đăng nhập với user CUSTOMER
+```
+POST http://localhost:3000/auth/login
+{
+  "email": "customer1@test.com",
+  "password": "password123"
+}
+```
+→ Lấy `access_token`
+
+### 2. Test endpoint cần auth
+```
+GET http://localhost:3000/users/profile
+Authorization: Bearer {access_token}
+```
+✅ Phải trả về profile
+
+### 3. Test endpoint ADMIN only
+```
+GET http://localhost:3000/users/admin-only
+Authorization: Bearer {customer_token}
+```
+❌ Phải trả về 403 Forbidden
+
+### 4. Đăng nhập với ADMIN
+```
+POST http://localhost:3000/auth/login
+{
+  "email": "admin@badminton.com",
+  "password": "Admin@123"
+}
+```
+
+```
+GET http://localhost:3000/users/admin-only
+Authorization: Bearer {admin_token}
+```
+✅ Phải trả về success
+
+## 🎯 Acceptance Criteria
+- [ ] JwtAuthGuard bảo vệ các route cần đăng nhập
+- [ ] RolesGuard kiểm tra quyền dựa trên @Roles()
+- [ ] CurrentUser decorator lấy được thông tin user
+- [ ] CUSTOMER không truy cập được endpoint ADMIN
+- [ ] ADMIN truy cập được tất cả endpoints
+
+## 📚 References
+- [NestJS Guards](https://docs.nestjs.com/guards)
+- [NestJS Custom Decorators](https://docs.nestjs.com/custom-decorators)
