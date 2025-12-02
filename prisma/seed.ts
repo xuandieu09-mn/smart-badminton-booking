@@ -3,11 +3,13 @@ import { PrismaClient, Role, BookingStatus, BookingType, PaymentMethod, PaymentS
 
 const prisma = new PrismaClient();
 
-// Helper function to hash password (simple version - in production use bcrypt)
+// Helper function to hash password
+// NOTE: For seed data, we use a predictable hash format.
+// In production, implement proper bcrypt hashing in the auth module.
 function hashPassword(password: string): string {
-  // In production, use bcrypt.hashSync(password, 10)
-  // For seed data, we'll use a simple placeholder that should be updated
-  return `hashed_${password}`;
+  // Placeholder for development/testing - replace with bcrypt in production auth module
+  // Example: return bcrypt.hashSync(password, 10);
+  return `$seed$${password}`;
 }
 
 async function main() {
@@ -147,12 +149,12 @@ async function main() {
       dayOfWeek: 6, // Saturday
       startTime: '06:00:00',
       endTime: '22:00:00',
-      pricePerHour: 60000, // +10k so with base 50k
+      pricePerHour: 60000, // 50k base + 10k weekend surcharge = 60k total
       priority: 2, // Higher priority than weekday rules
       isActive: true,
     },
   });
-  console.log('  Weekend - Saturday: 60,000 VND/h');
+  console.log('  Weekend - Saturday: 60,000 VND/h (base 50k + 10k weekend surcharge)');
 
   // Weekend - Sunday (dayOfWeek = 0)
   await prisma.pricingRule.upsert({
@@ -165,12 +167,12 @@ async function main() {
       dayOfWeek: 0, // Sunday
       startTime: '06:00:00',
       endTime: '22:00:00',
-      pricePerHour: 60000, // +10k
+      pricePerHour: 60000, // 50k base + 10k weekend surcharge = 60k total
       priority: 2,
       isActive: true,
     },
   });
-  console.log('  Weekend - Sunday: 60,000 VND/h');
+  console.log('  Weekend - Sunday: 60,000 VND/h (base 50k + 10k weekend surcharge)');
 
   // Golden hours weekend (combined rule - higher price)
   await prisma.pricingRule.upsert({
@@ -314,12 +316,14 @@ async function main() {
   console.log(`  Booking TEST04 (Guest): Court 3, ${booking4StartTime.toISOString()} - ${booking4EndTime.toISOString()}`);
 
   // Booking 5: Pending payment booking
+  // Set expiry to 15 minutes from now, simulating a recently created booking
   const booking5StartTime = new Date(tomorrow);
   booking5StartTime.setHours(18, 0, 0, 0);
   const booking5EndTime = new Date(tomorrow);
   booking5EndTime.setHours(20, 0, 0, 0);
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+  // Use tomorrow's date minus 14 minutes as expiry to simulate a fresh pending booking
+  const expiresAt = new Date(tomorrow);
+  expiresAt.setHours(7, 46, 0, 0); // 15 minutes from 7:31 AM when created
 
   await prisma.booking.upsert({
     where: { bookingCode: 'TEST05' },

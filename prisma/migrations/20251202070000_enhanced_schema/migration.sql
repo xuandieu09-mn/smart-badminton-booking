@@ -38,9 +38,22 @@ ALTER TABLE "Booking" ADD COLUMN "checkedInByStaffId" INTEGER;
 ALTER TABLE "Booking" ADD COLUMN "expiresAt" TIMESTAMP(3);
 ALTER TABLE "Booking" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
--- Convert status column to enum type
+-- Convert status column to enum type with explicit mapping
+-- Map legacy statuses to new enum values appropriately:
+-- - PENDING -> PENDING_PAYMENT (waiting for payment)
+-- - CONFIRMED stays as CONFIRMED
+-- - Any unknown status -> PENDING_PAYMENT (safe default for manual review)
 ALTER TABLE "Booking" ALTER COLUMN "status" TYPE TEXT;
-UPDATE "Booking" SET "status" = 'CONFIRMED' WHERE "status" = 'PENDING' OR "status" NOT IN ('PENDING_PAYMENT', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'CANCELLED_LATE', 'EXPIRED', 'BLOCKED');
+UPDATE "Booking" SET "status" = 
+  CASE 
+    WHEN "status" = 'PENDING' THEN 'PENDING_PAYMENT'
+    WHEN "status" = 'CONFIRMED' THEN 'CONFIRMED'
+    WHEN "status" = 'CHECKED_IN' THEN 'CHECKED_IN'
+    WHEN "status" = 'COMPLETED' THEN 'COMPLETED'
+    WHEN "status" = 'CANCELLED' THEN 'CANCELLED'
+    WHEN "status" IN ('PENDING_PAYMENT', 'CANCELLED_LATE', 'EXPIRED', 'BLOCKED') THEN "status"
+    ELSE 'PENDING_PAYMENT'  -- Safe default for unknown statuses
+  END;
 ALTER TABLE "Booking" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TABLE "Booking" ALTER COLUMN "status" TYPE "BookingStatus" USING "status"::"BookingStatus";
 ALTER TABLE "Booking" ALTER COLUMN "status" SET DEFAULT 'PENDING_PAYMENT';
