@@ -1,10 +1,7 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
+import { QUEUE_NAMES, JOB_NAMES } from '../queue/constants/queue.constants';
 import { CreateBookingDto } from './dto';
 import {
   BookingStatus,
@@ -13,10 +10,21 @@ import {
   PaymentMethod,
   Role,
 } from '@prisma/client';
+import type { ExpireBookingJobData } from './interfaces';
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 
 @Injectable()
 export class BookingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue(QUEUE_NAMES.BOOKING_TIMEOUT)
+    private bookingQueue: Queue<ExpireBookingJobData>,
+  ) {}
 
   /**
    * 📅 Create a new booking
@@ -152,6 +160,26 @@ export class BookingsService {
 
       return newBooking;
     });
+
+    // 8️⃣ Add expiration job to queue if PENDING_PAYMENT
+    if (status === BookingStatus.PENDING_PAYMENT && expiresAt) {
+      const delay = expiresAt.getTime() - Date.now();
+
+      await this.bookingQueue.add(
+        JOB_NAMES.EXPIRE_BOOKING,
+        { bookingId: booking.id },
+        {
+          delay,
+          jobId: `expire-booking-${booking.id}`,
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+
+      console.log(
+        `⏰ Scheduled expiration job for booking #${booking.id} in ${Math.round(delay / 1000)}s`,
+      );
+    }
 
     return {
       message: 'Booking created successfully',
