@@ -64,13 +64,15 @@ model User {
   isActive  Boolean  @default(true) // Allow deactivating accounts
 
   // 1 user has many bookings
-  bookings      Booking[]
+  bookings             Booking[] @relation("UserBookings")
   // 1 user has 1 wallet
-  wallet        Wallet?
+  wallet               Wallet?
   // Staff can create bookings for guests
-  staffBookings Booking[]     @relation("StaffCreatedBookings")
+  staffCreatedBookings Booking[] @relation("StaffCreatedBookings")
+  // Staff can check in bookings
+  staffCheckedIns      Booking[] @relation("StaffCheckedIn")
   // Admin actions (audit log)
-  adminActions  AdminAction[]
+  adminActions         AdminAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,7 +103,7 @@ model Booking {
   court   Court @relation(fields: [courtId], references: [id])
 
   userId Int? // Nullable for Guest bookings
-  user   User? @relation(fields: [userId], references: [id])
+  user   User? @relation("UserBookings", fields: [userId], references: [id])
 
   // Guest info (when userId = NULL)
   guestName  String?
@@ -130,13 +132,15 @@ model Booking {
   // Check-in
   checkedInAt        DateTime?
   checkedInByStaffId Int?
+  checkedInByStaff   User?  @relation("StaffCheckedIn", fields: [checkedInByStaffId], references: [id])
 
   // Expiry (for PENDING_PAYMENT status)
   expiresAt DateTime?
 
   // Relations
-  payment      Payment?
-  cancellation BookingCancellation?
+  payment            Payment?
+  cancellation       BookingCancellation?
+  walletTransactions WalletTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,12 +171,16 @@ model WalletTransaction {
 
   // Reference
   bookingId   Int?
+  booking     Booking? @relation(fields: [bookingId], references: [id])
   description String?
 
   balanceBefore Decimal
   balanceAfter  Decimal
 
   createdAt DateTime @default(now())
+
+  @@index([walletId])
+  @@index([bookingId])
 }
 
 model Payment {

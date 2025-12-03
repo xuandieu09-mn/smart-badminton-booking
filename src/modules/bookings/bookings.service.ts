@@ -90,15 +90,21 @@ export class BookingsService {
     const bookingCode = await this.generateBookingCode();
 
     // 6️⃣ Determine booking status and expiration
-    const isGuestBooking = !userId && guestName && guestPhone;
+    // ✅ FIX: Check guestName/guestPhone first (Staff can create guest booking)
+    const isGuestBooking = guestName && guestPhone;
     const bookingType = type || BookingType.REGULAR;
 
     let status: BookingStatus;
     let expiresAt: Date | null = null;
+    let finalUserId: number | null = userId;
 
-    if (bookingType === BookingType.MAINTENANCE) {
+    if (isGuestBooking) {
+      // Guest booking: no userId, must use CASH
+      finalUserId = null;
+      status = BookingStatus.CONFIRMED;
+    } else if (bookingType === BookingType.MAINTENANCE) {
       status = BookingStatus.BLOCKED;
-    } else if (isGuestBooking || paymentMethod === PaymentMethod.CASH) {
+    } else if (paymentMethod === PaymentMethod.CASH) {
       status = BookingStatus.CONFIRMED;
     } else {
       status = BookingStatus.PENDING_PAYMENT;
@@ -111,7 +117,7 @@ export class BookingsService {
         data: {
           bookingCode,
           courtId,
-          userId,
+          userId: finalUserId, // ✅ Use finalUserId (null for guest)
           guestName: isGuestBooking ? guestName : null,
           guestPhone: isGuestBooking ? guestPhone : null,
           startTime: start,
