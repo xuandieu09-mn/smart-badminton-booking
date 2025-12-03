@@ -4,7 +4,7 @@ Hệ thống đặt lịch sân cầu lông thông minh (Smart Badminton Booking
 
 Backend: NestJS (TypeScript), PostgreSQL, Prisma ORM.
 
-Architecture: Modular Monolith (Controller -> Service -> Repository).
+Architecture: Modular Monolith (Convice ->troller -> Ser Repository).
 
 Key Feature: Ngăn chặn đặt trùng sân (Double Booking) tuyệt đối bằng Database Constraints.
 

@@ -1,21 +1,25 @@
 // prisma/seed.ts
-import { PrismaClient, Role, BookingStatus, BookingType, PaymentMethod, PaymentStatus, User, Court } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  BookingStatus,
+  BookingType,
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-// Helper function to hash password
-// NOTE: For seed data, we use a predictable hash format.
-// In production, implement proper bcrypt hashing in the auth module.
-function hashPassword(password: string): string {
-  // Placeholder for development/testing - replace with bcrypt in production auth module
-  // Example: return bcrypt.hashSync(password, 10);
-  return `$seed$${password}`;
+// Use real bcrypt hash
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
 }
 
 async function main() {
   console.log('Starting database seeding...');
 
-  // ==================== USERS ====================
   console.log('Creating users...');
 
   // Admin user
@@ -24,7 +28,7 @@ async function main() {
     update: {},
     create: {
       email: 'admin@badminton.com',
-      password: hashPassword('Admin@123'),
+      password: await hashPassword('Admin@123'),
       name: 'Admin User',
       role: Role.ADMIN,
       isActive: true,
@@ -38,7 +42,7 @@ async function main() {
     update: {},
     create: {
       email: 'staff@badminton.com',
-      password: hashPassword('Staff@123'),
+      password: await hashPassword('Staff@123'),
       name: 'Staff User',
       role: Role.STAFF,
       isActive: true,
@@ -47,21 +51,31 @@ async function main() {
   console.log(`  Staff: ${staff.email}`);
 
   // Customer users
-  const customers: User[] = [];
+  const customers: Array<{
+    id: number;
+    email: string;
+    password: string;
+    name: string | null;
+    role: Role;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+
   for (let i = 1; i <= 3; i++) {
     const customer = await prisma.user.upsert({
-      where: { email: `test${i}@test.com` },
+      where: { email: `customer${i}@test.com` },
       update: {},
       create: {
-        email: `test${i}@test.com`,
-        password: hashPassword('Test@123'),
-        name: `Test Customer ${i}`,
+        email: `customer${i}@test.com`,
+        password: await hashPassword('password123'),
+        name: `Customer ${i}`,
         role: Role.CUSTOMER,
         isActive: true,
       },
     });
     customers.push(customer);
-    console.log(`  Customer: ${customer.email}`);
+    console.log(`  Customer ${i}: ${customer.email}`);
   }
 
   // ==================== WALLETS ====================
@@ -82,7 +96,16 @@ async function main() {
   // ==================== COURTS ====================
   console.log('Creating courts...');
 
-  const courts: Court[] = [];
+  const courts: Array<{
+    id: number;
+    name: string;
+    description: string | null;
+    pricePerHour: Prisma.Decimal;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+
   for (let i = 1; i <= 5; i++) {
     const court = await prisma.court.upsert({
       where: { id: i },
@@ -109,8 +132,8 @@ async function main() {
     create: {
       id: 1,
       name: 'Normal Hours',
-      courtId: null, // Applies to all courts
-      dayOfWeek: null, // All days
+      courtId: null,
+      dayOfWeek: null,
       startTime: '06:00:00',
       endTime: '17:00:00',
       pricePerHour: 50000,
@@ -132,7 +155,7 @@ async function main() {
       startTime: '17:00:00',
       endTime: '21:00:00',
       pricePerHour: 80000,
-      priority: 1, // Higher priority than normal hours
+      priority: 1,
       isActive: true,
     },
   });
@@ -146,15 +169,17 @@ async function main() {
       id: 3,
       name: 'Weekend - Saturday',
       courtId: null,
-      dayOfWeek: 6, // Saturday
+      dayOfWeek: 6,
       startTime: '06:00:00',
       endTime: '22:00:00',
-      pricePerHour: 60000, // 50k base + 10k weekend surcharge = 60k total
-      priority: 2, // Higher priority than weekday rules
+      pricePerHour: 60000,
+      priority: 2,
       isActive: true,
     },
   });
-  console.log('  Weekend - Saturday: 60,000 VND/h (base 50k + 10k weekend surcharge)');
+  console.log(
+    '  Weekend - Saturday: 60,000 VND/h (base 50k + 10k weekend surcharge)',
+  );
 
   // Weekend - Sunday (dayOfWeek = 0)
   await prisma.pricingRule.upsert({
@@ -164,17 +189,19 @@ async function main() {
       id: 4,
       name: 'Weekend - Sunday',
       courtId: null,
-      dayOfWeek: 0, // Sunday
+      dayOfWeek: 0,
       startTime: '06:00:00',
       endTime: '22:00:00',
-      pricePerHour: 60000, // 50k base + 10k weekend surcharge = 60k total
+      pricePerHour: 60000,
       priority: 2,
       isActive: true,
     },
   });
-  console.log('  Weekend - Sunday: 60,000 VND/h (base 50k + 10k weekend surcharge)');
+  console.log(
+    '  Weekend - Sunday: 60,000 VND/h (base 50k + 10k weekend surcharge)',
+  );
 
-  // Golden hours weekend (combined rule - higher price)
+  // Golden hours weekend - Saturday
   await prisma.pricingRule.upsert({
     where: { id: 5 },
     update: {},
@@ -185,13 +212,14 @@ async function main() {
       dayOfWeek: 6,
       startTime: '17:00:00',
       endTime: '21:00:00',
-      pricePerHour: 90000, // 80k + 10k weekend
-      priority: 3, // Highest priority
+      pricePerHour: 90000,
+      priority: 3,
       isActive: true,
     },
   });
   console.log('  Golden Hours Weekend - Saturday: 90,000 VND/h');
 
+  // Golden hours weekend - Sunday
   await prisma.pricingRule.upsert({
     where: { id: 6 },
     update: {},
@@ -212,12 +240,11 @@ async function main() {
   // ==================== SAMPLE BOOKINGS ====================
   console.log('Creating sample bookings...');
 
-  // Get tomorrow's date for bookings
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
 
-  // Booking 1: Customer 1 books Court 1 from 8:00-10:00 tomorrow
+  // Booking 1
   const booking1StartTime = new Date(tomorrow);
   booking1StartTime.setHours(8, 0, 0, 0);
   const booking1EndTime = new Date(tomorrow);
@@ -232,7 +259,7 @@ async function main() {
       userId: customers[0].id,
       startTime: booking1StartTime,
       endTime: booking1EndTime,
-      totalPrice: 100000, // 2 hours * 50000
+      totalPrice: 100000,
       status: BookingStatus.CONFIRMED,
       type: BookingType.REGULAR,
       paymentMethod: PaymentMethod.WALLET,
@@ -240,9 +267,11 @@ async function main() {
       createdBy: 'CUSTOMER',
     },
   });
-  console.log(`  Booking TEST01: Court 1, ${booking1StartTime.toISOString()} - ${booking1EndTime.toISOString()}`);
+  console.log(
+    `  Booking TEST01: Court 1, ${booking1StartTime.toISOString()} - ${booking1EndTime.toISOString()}`,
+  );
 
-  // Booking 2: Customer 2 books Court 1 from 10:00-12:00 tomorrow (adjacent to booking 1)
+  // Booking 2
   const booking2StartTime = new Date(tomorrow);
   booking2StartTime.setHours(10, 0, 0, 0);
   const booking2EndTime = new Date(tomorrow);
@@ -265,9 +294,11 @@ async function main() {
       createdBy: 'CUSTOMER',
     },
   });
-  console.log(`  Booking TEST02: Court 1, ${booking2StartTime.toISOString()} - ${booking2EndTime.toISOString()}`);
+  console.log(
+    `  Booking TEST02: Court 1, ${booking2StartTime.toISOString()} - ${booking2EndTime.toISOString()}`,
+  );
 
-  // Booking 3: Customer 3 books Court 2 from 8:00-10:00 tomorrow (same time, different court)
+  // Booking 3
   await prisma.booking.upsert({
     where: { bookingCode: 'TEST03' },
     update: {},
@@ -285,9 +316,11 @@ async function main() {
       createdBy: 'CUSTOMER',
     },
   });
-  console.log(`  Booking TEST03: Court 2, ${booking1StartTime.toISOString()} - ${booking1EndTime.toISOString()}`);
+  console.log(
+    `  Booking TEST03: Court 2, ${booking1StartTime.toISOString()} - ${booking1EndTime.toISOString()}`,
+  );
 
-  // Booking 4: Guest booking by Staff on Court 3
+  // Booking 4 - Guest booking
   const booking4StartTime = new Date(tomorrow);
   booking4StartTime.setHours(14, 0, 0, 0);
   const booking4EndTime = new Date(tomorrow);
@@ -299,7 +332,7 @@ async function main() {
     create: {
       bookingCode: 'TEST04',
       courtId: courts[2].id,
-      userId: null, // Guest booking
+      userId: null,
       guestName: 'Guest User',
       guestPhone: '0901234567',
       startTime: booking4StartTime,
@@ -313,17 +346,17 @@ async function main() {
       createdByStaffId: staff.id,
     },
   });
-  console.log(`  Booking TEST04 (Guest): Court 3, ${booking4StartTime.toISOString()} - ${booking4EndTime.toISOString()}`);
+  console.log(
+    `  Booking TEST04 (Guest): Court 3, ${booking4StartTime.toISOString()} - ${booking4EndTime.toISOString()}`,
+  );
 
-  // Booking 5: Pending payment booking
-  // Set expiry to 15 minutes from now, simulating a recently created booking
+  // Booking 5 - Pending payment
   const booking5StartTime = new Date(tomorrow);
   booking5StartTime.setHours(18, 0, 0, 0);
   const booking5EndTime = new Date(tomorrow);
   booking5EndTime.setHours(20, 0, 0, 0);
-  // Use tomorrow's date minus 14 minutes as expiry to simulate a fresh pending booking
   const expiresAt = new Date(tomorrow);
-  expiresAt.setHours(7, 46, 0, 0); // 15 minutes from 7:31 AM when created
+  expiresAt.setHours(7, 46, 0, 0);
 
   await prisma.booking.upsert({
     where: { bookingCode: 'TEST05' },
@@ -334,7 +367,7 @@ async function main() {
       userId: customers[0].id,
       startTime: booking5StartTime,
       endTime: booking5EndTime,
-      totalPrice: 160000, // Golden hours 2h * 80000
+      totalPrice: 160000,
       status: BookingStatus.PENDING_PAYMENT,
       type: BookingType.REGULAR,
       paymentStatus: PaymentStatus.UNPAID,
@@ -342,9 +375,11 @@ async function main() {
       expiresAt: expiresAt,
     },
   });
-  console.log(`  Booking TEST05 (Pending): Court 4, ${booking5StartTime.toISOString()} - ${booking5EndTime.toISOString()}`);
+  console.log(
+    `  Booking TEST05 (Pending): Court 4, ${booking5StartTime.toISOString()} - ${booking5EndTime.toISOString()}`,
+  );
 
-  // Booking 6: Maintenance block by Admin
+  // Booking 6 - Maintenance
   const booking6StartTime = new Date(tomorrow);
   booking6StartTime.setHours(6, 0, 0, 0);
   const booking6EndTime = new Date(tomorrow);
@@ -366,7 +401,9 @@ async function main() {
       createdBy: 'ADMIN',
     },
   });
-  console.log(`  Booking MAINT1 (Maintenance): Court 5, ${booking6StartTime.toISOString()} - ${booking6EndTime.toISOString()}`);
+  console.log(
+    `  Booking MAINT1 (Maintenance): Court 5, ${booking6StartTime.toISOString()} - ${booking6EndTime.toISOString()}`,
+  );
 
   // ==================== ADMIN ACTION LOG ====================
   console.log('Creating admin action log...');
