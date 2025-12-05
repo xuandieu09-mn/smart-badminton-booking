@@ -28,7 +28,7 @@ export class PaymentsController {
     @Param('bookingId') bookingId: string,
     @CurrentUser() user: any,
   ) {
-    return this.paymentsService.payWithWallet(Number(bookingId), user.id);
+    return this.paymentsService.payWithWallet(Number(bookingId), Number(user.id));
   }
 
   /**
@@ -55,7 +55,7 @@ export class PaymentsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async getUserPayments(@CurrentUser() user: any) {
-    return this.paymentsService.getUserPayments(user.id);
+    return this.paymentsService.getUserPayments(Number(user.id));
   }
 
   /**

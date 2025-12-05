@@ -145,10 +145,10 @@ export class PaymentsService {
         data: {
           walletId: updatedWallet.id,
           type: 'PAYMENT',
-          amount: new Decimal(totalPrice),
+          amount: booking.totalPrice,
           description: `Payment for booking #${booking.bookingCode}`,
           bookingId,
-          balanceBefore: new Decimal(walletBalance),
+          balanceBefore: wallet.balance,
           balanceAfter: updatedWallet.balance,
         },
       });
