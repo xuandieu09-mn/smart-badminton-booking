@@ -275,7 +275,7 @@ export class PaymentsService {
           amount: payment.amount,
           description: `Refund for booking #${booking.bookingCode}`,
           bookingId: booking.id,
-          balanceBefore: new Decimal(Number(currentWallet!.balance)),
+          balanceBefore: currentWallet!.balance,
           balanceAfter: updatedWallet.balance,
         },
       });
