@@ -8,7 +8,7 @@ import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { CalendarPage } from '../features/calendar/pages/CalendarPage';
 import { BookingPage } from '../features/booking/pages/BookingPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
-import { AdminDashboard } from '../features/dashboard/pages/AdminDashboard';
+import AdminDashboard from '../features/admin/pages/AdminDashboard';
 import { NotFound } from '../features/common/components/NotFound';
 
 const HomePage: React.FC = () => (
@@ -38,6 +38,14 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: '/admin',
+    element: (
+      <ProtectedRoute requiredRole="ADMIN">
+        <AdminDashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/',
     element: (
       <ProtectedRoute>
@@ -56,14 +64,6 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <CustomerDashboard />,
-      },
-      {
-        path: 'admin',
-        element: (
-          <ProtectedRoute requiredRole="ADMIN">
-            <AdminDashboard />
-          </ProtectedRoute>
-        ),
       },
     ],
   },
