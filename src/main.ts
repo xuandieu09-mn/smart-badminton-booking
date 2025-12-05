@@ -14,6 +14,7 @@ async function bootstrap() {
   );
 
   app.enableCors();
+  app.setGlobalPrefix('api');
 
   await app.listen(process.env.PORT ?? 3000);
   console.log('🚀 Backend running on http://localhost:3000');

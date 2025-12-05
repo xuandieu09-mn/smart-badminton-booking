@@ -1,93 +1,133 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Test, TestingModule } from '@nestjs/testing';
 import type { Job } from 'bull';
-import { Logger } from '@nestjs/common';
+import { BookingTimeoutProcessor } from './booking-timeout.processor';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
-import { QUEUE_NAMES, JOB_NAMES } from '../../queue/constants/queue.constants';
+import { mockPrismaService } from '../../../test/test-helpers';
 import type {
   ExpireBookingJobData,
   ExpireBookingJobResult,
-} from '../interfaces/booking-job.interface'; // ✅ Import từ file mới
+} from '../interfaces/booking-job.interface';
 
-@Processor(QUEUE_NAMES.BOOKING_TIMEOUT)
-export class BookingTimeoutProcessor {
-  private readonly logger = new Logger(BookingTimeoutProcessor.name);
+describe('BookingTimeoutProcessor', () => {
+  let processor: BookingTimeoutProcessor;
+  let prismaService: PrismaService;
 
-  constructor(private prisma: PrismaService) {}
+  const createMockJob = (bookingId: number): Job<ExpireBookingJobData> => {
+    return {
+      data: { bookingId },
+      id: '1',
+      name: 'expire-booking',
+      attemptsMade: 0,
+    } as Job<ExpireBookingJobData>;
+  };
 
-  @Process(JOB_NAMES.EXPIRE_BOOKING)
-  async handleBookingExpiration(
-    job: Job<ExpireBookingJobData>,
-  ): Promise<ExpireBookingJobResult> {
-    const { bookingId } = job.data;
-
-    this.logger.log(`⏰ Processing booking expiration for ID: ${bookingId}`);
-
-    try {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        select: {
-          id: true,
-          bookingCode: true,
-          status: true,
-          paymentStatus: true,
-          expiresAt: true,
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BookingTimeoutProcessor,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
         },
-      });
+      ],
+    }).compile();
 
-      if (!booking) {
-        this.logger.warn(`⚠️ Booking ${bookingId} not found`);
-        return {
-          success: false,
-          bookingId,
-          reason: 'Booking not found',
-        };
-      }
+    processor = module.get<BookingTimeoutProcessor>(BookingTimeoutProcessor);
+    prismaService = module.get<PrismaService>(PrismaService);
+  });
 
-      if (booking.status !== BookingStatus.PENDING_PAYMENT) {
-        this.logger.log(
-          `ℹ️ Booking ${booking.bookingCode} already ${booking.status}, skipping expiration`,
-        );
-        return {
-          success: false,
-          bookingId,
-          bookingCode: booking.bookingCode,
-          reason: `Already ${booking.status}`,
-        };
-      }
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-      if (booking.paymentStatus === PaymentStatus.PAID) {
-        this.logger.log(
-          `✅ Booking ${booking.bookingCode} already paid, skipping expiration`,
-        );
-        return {
-          success: false,
-          bookingId,
-          bookingCode: booking.bookingCode,
-          reason: 'Already paid',
-        };
-      }
+  it('should be defined', () => {
+    expect(processor).toBeDefined();
+  });
 
-      const updated = await this.prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: BookingStatus.EXPIRED },
-        select: { id: true, bookingCode: true, status: true },
-      });
-
-      this.logger.log(`✅ Booking ${updated.bookingCode} expired successfully`);
-
-      return {
-        success: true,
-        bookingId: updated.id,
-        bookingCode: updated.bookingCode,
-        newStatus: updated.status,
+  describe('handleBookingExpiration', () => {
+    it('should expire a PENDING_PAYMENT booking', async () => {
+      const mockBooking = {
+        id: 1,
+        bookingCode: 'BK241203-0001',
+        status: BookingStatus.PENDING_PAYMENT,
+        paymentStatus: PaymentStatus.UNPAID,
+        expiresAt: new Date(),
       };
-    } catch (error) {
-      this.logger.error(
-        `❌ Error expiring booking ${bookingId}: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-}
+
+      const mockUpdatedBooking = {
+        id: 1,
+        bookingCode: 'BK241203-0001',
+        status: BookingStatus.EXPIRED,
+      };
+
+      jest
+        .spyOn(prismaService.booking, 'findUnique')
+        .mockResolvedValueOnce(mockBooking as any);
+      jest
+        .spyOn(prismaService.booking, 'update')
+        .mockResolvedValueOnce(mockUpdatedBooking as any);
+
+      const mockJob = createMockJob(1);
+      const result = await processor.handleBookingExpiration(mockJob);
+
+      expect(result.success).toBe(true);
+      expect(result.newStatus).toBe(BookingStatus.EXPIRED);
+    });
+
+    it('should skip expiration if booking is already CONFIRMED', async () => {
+      const mockBooking = {
+        id: 1,
+        bookingCode: 'BK241203-0001',
+        status: BookingStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.PAID,
+        expiresAt: new Date(),
+      };
+
+      jest
+        .spyOn(prismaService.booking, 'findUnique')
+        .mockResolvedValueOnce(mockBooking as any);
+
+      const mockJob = createMockJob(1);
+      const result = await processor.handleBookingExpiration(mockJob);
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toContain('Already');
+    });
+
+    it('should handle booking not found', async () => {
+      jest
+        .spyOn(prismaService.booking, 'findUnique')
+        .mockResolvedValueOnce(null);
+
+      const mockJob = createMockJob(999);
+      const result = await processor.handleBookingExpiration(mockJob);
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('Booking not found');
+    });
+
+    it('should throw error on database failure', async () => {
+      const mockBooking = {
+        id: 1,
+        bookingCode: 'BK241203-0001',
+        status: BookingStatus.PENDING_PAYMENT,
+        paymentStatus: PaymentStatus.UNPAID,
+        expiresAt: new Date(),
+      };
+
+      jest
+        .spyOn(prismaService.booking, 'findUnique')
+        .mockResolvedValueOnce(mockBooking as any);
+      jest
+        .spyOn(prismaService.booking, 'update')
+        .mockRejectedValueOnce(new Error('Database error'));
+
+      const mockJob = createMockJob(1);
+
+      await expect(
+        processor.handleBookingExpiration(mockJob),
+      ).rejects.toThrow('Database error');
+    });
+  });
+});
