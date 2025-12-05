@@ -32,3 +32,9 @@ Khi viết code, hãy giải thích ngắn gọn logic.
 Nếu đụng đến Database, hãy ưu tiên viết migration SQL thô (Raw SQL) để xử lý các tính năng nâng cao mà Prisma chưa hỗ trợ (như Exclusion Constraint).
 
 Luôn kiểm tra input data bằng DTO.
+
+
+{
+  "email": "customer1@test.com",
+  "password": "password123"
+}
