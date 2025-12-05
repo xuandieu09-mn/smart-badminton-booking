@@ -28,7 +28,10 @@ export class PaymentsController {
     @Param('bookingId') bookingId: string,
     @CurrentUser() user: any,
   ) {
-    return this.paymentsService.payWithWallet(Number(bookingId), Number(user.id));
+    return this.paymentsService.payWithWallet(
+      Number(bookingId),
+      Number(user.id),
+    );
   }
 
   /**

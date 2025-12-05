@@ -1,4 +1,4 @@
-import { IsNumber, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsEnum } from 'class-validator';
 import { PaymentStatus } from '@prisma/client';
 
 export class CreatePaymentDto {
