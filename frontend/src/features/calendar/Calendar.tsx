@@ -175,9 +175,7 @@ export const Calendar: React.FC = () => {
                       ←
                     </button>
                     <h2 className="text-2xl font-bold">
-                      {format(selectedDate, 'EEEE, dd MMMM yyyy', {
-                        locale: vi,
-                      })}
+                      {format(selectedDate, 'EEEE, dd MMMM yyyy')}
                     </h2>
                     <button
                       onClick={() => handleDateChange(1)}

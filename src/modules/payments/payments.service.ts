@@ -4,7 +4,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreatePaymentDto, UpdatePaymentStatusDto } from './dto';
 import { Payment, PaymentStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
