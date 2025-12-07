@@ -302,6 +302,82 @@ export class BookingsService {
   }
 
   /**
+   * 📅 Get bookings by date (for timeline view)
+   * Returns all bookings (including non-CANCELLED) on a specific date
+   */
+  async getBookingsByDate(dateStr: string) {
+    // Parse date string "YYYY-MM-DD"
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        startTime: {
+          gte: startDate,
+          lt: endDate,
+        },
+        status: {
+          notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+        },
+      },
+      select: {
+        id: true,
+        courtId: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        paymentStatus: true,
+        bookingCode: true,
+        expiresAt: true,
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    return bookings;
+  }
+
+  /**
+   * 🏸 Get bookings for a specific court on a specific date
+   */
+  async getCourtBookingsByDate(courtId: number, dateStr: string) {
+    // Parse date string "YYYY-MM-DD"
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        courtId,
+        startTime: {
+          gte: startDate,
+          lt: endDate,
+        },
+        status: {
+          notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+        },
+      },
+      select: {
+        id: true,
+        courtId: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        paymentStatus: true,
+        bookingCode: true,
+        expiresAt: true,
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    return bookings;
+  }
+
+  /**
    * 🔍 Get booking by ID
    */
   async getBookingById(id: number, userId?: number) {

@@ -1,0 +1,281 @@
+/* Timeline Resource Grid Styles */
+
+.timeline-resource-grid-container {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+/* Main wrapper */
+.timeline-wrapper {
+  display: flex;
+  width: 100%;
+  max-height: 600px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ======================== Court Names (Sticky Left) ======================== */
+.timeline-court-names {
+  flex-shrink: 0;
+  width: 200px;
+  border-right: 2px solid #d1d5db;
+  background: #f9fafb;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-court-name-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50px;
+  border-bottom: 2px solid #d1d5db;
+  background: #f3f4f6;
+  font-weight: 600;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.timeline-court-name-cell {
+  padding: 8px 12px;
+  width: 100%;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.timeline-court-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+.timeline-court-name-row:hover {
+  background: #f3f4f6;
+}
+
+/* ======================== Timeline Grid (Scrollable Right) ======================== */
+.timeline-grid-wrapper {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Timeline header (hour labels) */
+.timeline-header {
+  display: flex;
+  height: 50px;
+  border-bottom: 2px solid #d1d5db;
+  background: #f3f4f6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.timeline-hour-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #d1d5db;
+  padding: 4px;
+  text-align: center;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.timeline-hour-cell:last-child {
+  border-right: none;
+}
+
+.timeline-hour-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* Timeline body (grid lines + slots + bookings) */
+.timeline-grid-body {
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.timeline-grid-line {
+  position: absolute;
+  top: 0;
+  border-right: 1px solid #e5e7eb;
+  box-sizing: border-box;
+}
+
+.timeline-grid-line:last-child {
+  border-right: 2px solid #d1d5db;
+}
+
+/* Court row container */
+.timeline-court-row {
+  position: absolute;
+  left: 0;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.timeline-court-row:hover {
+  background: #f9fafb;
+}
+
+/* Interactive 30-minute slots */
+.timeline-slot {
+  position: absolute;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.timeline-slot:hover {
+  opacity: 0.1;
+  background: #3b82f6;
+}
+
+/* Booking block (khối lịch đặt sân) */
+.timeline-booking-block {
+  position: absolute;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.timeline-booking-block:hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+}
+
+/* Trạng thái Booked (Đã đặt) - Red */
+.timeline-booking-block.status-booked {
+  background: #ef4444;
+  color: white;
+}
+
+/* Trạng thái Pending (Chờ thanh toán) - Amber */
+.timeline-booking-block.status-pending {
+  background: #f59e0b;
+  color: white;
+}
+
+/* Trạng thái Completed (Hoàn thành) - Green */
+.timeline-booking-block.status-completed {
+  background: #10b981;
+  color: white;
+}
+
+/* Trạng thái Cancelled (Hủy) - Gray */
+.timeline-booking-block.status-cancelled {
+  background: #9ca3af;
+  color: white;
+}
+
+/* Trạng thái Disabled/Locked (Không khả dụng) - Dark Gray */
+.timeline-booking-block.status-disabled {
+  background: #6b7280;
+  color: white;
+  cursor: not-allowed;
+}
+
+.timeline-booking-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+/* Selection block (user choosing slots) */
+.timeline-selection-block {
+  position: absolute;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.6);
+  border: 1px solid #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.timeline-selection-label {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* ======================== Legend ======================== */
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  justify-content: flex-start;
+  font-size: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ======================== Responsive ======================== */
+@media (max-width: 768px) {
+  .timeline-wrapper {
+    max-height: 400px;
+  }
+
+  .timeline-court-names {
+    width: 150px;
+  }
+
+  .timeline-hour-label {
+    font-size: 10px;
+  }
+
+  .timeline-booking-label {
+    font-size: 9px;
+  }
+
+  .timeline-legend {
+    gap: 12px;
+    font-size: 11px;
+  }
+}

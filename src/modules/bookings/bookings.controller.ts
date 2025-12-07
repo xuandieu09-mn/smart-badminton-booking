@@ -6,6 +6,7 @@ import {
   Body,
   UseGuards,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto';
@@ -45,6 +46,31 @@ export class BookingsController {
       total: bookings.length,
       bookings,
     };
+  }
+
+  /**
+   * 📊 Get bookings by date (for timeline view)
+   */
+  @Get('by-date')
+  async getBookingsByDate(@Query('date') date?: string) {
+    if (!date) {
+      return [];
+    }
+    return this.bookingsService.getBookingsByDate(date);
+  }
+
+  /**
+   * 🏸 Get bookings for a specific court on a specific date
+   */
+  @Get('court/:courtId')
+  async getCourtBookingsByDate(
+    @Param('courtId', ParseIntPipe) courtId: number,
+    @Query('date') date?: string,
+  ) {
+    if (!date) {
+      return [];
+    }
+    return this.bookingsService.getCourtBookingsByDate(courtId, date);
   }
 
   /**

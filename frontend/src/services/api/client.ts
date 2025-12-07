@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Base URL should include the API prefix (NestJS is configured with global prefix 'api')
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const apiClient = axios.create({
   baseURL: API_URL,

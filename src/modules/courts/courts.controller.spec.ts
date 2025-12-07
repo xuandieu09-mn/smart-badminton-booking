@@ -76,20 +76,24 @@ describe('CourtsController', () => {
   });
 
   describe('GET /courts/:id/available-slots', () => {
-    it('should return available time slots', async () => {
-      const mockSlots = [
-        { startTime: '06:00', endTime: '07:00' },
-        { startTime: '07:00', endTime: '08:00' },
-      ];
+    it('should return availability with pricing', async () => {
+      const mockAvailability = {
+        date: '2025-12-10',
+        slots: [
+          { time: '06:00-07:00', available: true, price: 50000, priceType: 'NORMAL' },
+          { time: '07:00-08:00', available: false, price: 50000, priceType: 'NORMAL' },
+        ],
+      };
 
       jest
-        .spyOn(service, 'getAvailableSlots')
-        .mockResolvedValueOnce(mockSlots);
+        .spyOn(service, 'getCourtAvailability')
+        .mockResolvedValueOnce(mockAvailability as any);
 
-      const result = await controller.getAvailableSlots('1', '2025-12-10');
+      const result = await controller.getAvailability('1', '2025-12-10');
 
-      expect(result).toHaveLength(2);
-      expect(result[0].startTime).toBe('06:00');
+      expect(result.date).toBe('2025-12-10');
+      expect(result.slots).toHaveLength(2);
+      expect(result.slots[0].priceType).toBe('NORMAL');
     });
   });
 });

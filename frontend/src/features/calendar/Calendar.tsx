@@ -1,295 +1,222 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { format, addDays, startOfDay, isSameDay, isToday } from 'date-fns';
-import axios from 'axios';
-
-const API = axios.create({
-  baseURL: 'http://localhost:3000/api',
-  timeout: 10000,
-});
-
-interface Court {
-  id: number;
-  name: string;
-  description?: string;
-  pricePerHour: number;
-}
-
-interface AvailableSlot {
-  startTime: string;
-  endTime: string;
-}
-
-interface BookingData {
-  courtId: number;
-  startTime: Date;
-  endTime: Date;
-}
+import React, { useMemo, useState } from 'react';
+import { format, addDays } from 'date-fns';
+import { useCourts } from './hooks/useCourts';
+import { useAllCourtBookingsByDate } from './hooks/useCourtBookings';
+import { usePollBookings } from './hooks/usePollBookings';
+import TimelineResourceGrid, { TimelineBooking } from './components/TimelineResourceGrid';
+import { useMutation } from '@tanstack/react-query';
+import apiClient from '../../services/api/client';
+import './components/TimelineResourceGrid.css';
 
 export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [bookingData, setBookingData] = useState<Partial<BookingData>>({});
+  const [selectedCourtId, setSelectedCourtId] = useState<number | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<number[]>([]); // timestamps (ms) per 30m slot
 
-  // Fetch courts
-  const { data: courts, isLoading: courtsLoading } = useQuery({
-    queryKey: ['courts'],
-    queryFn: async () => {
-      const res = await API.get<Court[]>('/courts');
-      return res.data;
-    },
-  });
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  // Fetch available slots for selected court and date
-  const { data: availableSlots, isLoading: slotsLoading } = useQuery({
-    queryKey: ['available-slots', selectedCourt?.id, selectedDate],
-    queryFn: async () => {
-      if (!selectedCourt) return [];
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const res = await API.get<AvailableSlot[]>(
-        `/courts/${selectedCourt.id}/available-slots?date=${dateStr}`,
-      );
-      return res.data;
-    },
-    enabled: !!selectedCourt,
-  });
+  const { data: courts, isLoading: courtsLoading } = useCourts();
+  const { data: bookings = [], isLoading: bookingsLoading } = useAllCourtBookingsByDate(dateStr);
 
-  // Get pricing for selected slot
-  const { data: pricing } = useQuery({
-    queryKey: ['pricing', selectedCourt?.id, selectedSlot],
-    queryFn: async () => {
-      if (!selectedCourt || !selectedSlot) return null;
-      const startTime = new Date(selectedDate);
-      const [startHour] = selectedSlot.startTime.split(':').map(Number);
-      startTime.setHours(startHour, 0, 0, 0);
+  // Polling real-time bookings mỗi 5 giây
+  usePollBookings(dateStr, 5000);
 
-      const endTime = new Date(startTime);
-      endTime.setHours(endTime.getHours() + 1);
-
-      const res = await API.get('/courts/' + selectedCourt.id + '/pricing', {
-        params: {
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        },
-      });
-      return res.data;
-    },
-    enabled: !!selectedCourt && !!selectedSlot,
-  });
-
-  // Create booking mutation
   const { mutate: createBooking, isPending: isBooking } = useMutation({
-    mutationFn: async () => {
-      if (!selectedCourt || !selectedSlot) throw new Error('Missing booking data');
-
-      const startTime = new Date(selectedDate);
-      const [startHour] = selectedSlot.startTime.split(':').map(Number);
-      startTime.setHours(startHour, 0, 0, 0);
-
-      const endTime = new Date(startTime);
-      endTime.setHours(endTime.getHours() + 1);
-
-      return API.post('/bookings', {
-        courtId: selectedCourt.id,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        numberOfCourts: 1,
+    mutationFn: async (params: { courtId: number; startTime: Date; endTime: Date }) => {
+      return apiClient.post('/bookings', {
+        courtId: params.courtId,
+        startTime: params.startTime.toISOString(),
+        endTime: params.endTime.toISOString(),
       });
     },
     onSuccess: (response) => {
-      alert('Booking created! Booking ID: ' + response.data.id);
-      // Reset form
-      setSelectedCourt(null);
-      setSelectedSlot(null);
+      alert('Booking created! Booking Code: ' + response.data.booking?.bookingCode);
+      setSelectedSlots([]);
+      setSelectedCourtId(null);
     },
     onError: (error: any) => {
-      alert('Error creating booking: ' + error.response?.data?.message);
+      alert('Error creating booking: ' + (error.response?.data?.message || error.message));
     },
   });
 
-  const handleDateChange = (days: number) => {
-    setSelectedDate(addDays(selectedDate, days));
-    setSelectedSlot(null);
+  const selectedRange = useMemo(() => {
+    if (!selectedCourtId || selectedSlots.length === 0) return null;
+    const sorted = [...selectedSlots].sort((a, b) => a - b);
+    const start = new Date(sorted[0]);
+    const end = new Date(sorted[sorted.length - 1] + 30 * 60 * 1000);
+    return { courtId: selectedCourtId, start, end };
+  }, [selectedCourtId, selectedSlots]);
+
+  const handleSlotToggle = (courtId: number, startTime: Date) => {
+    // Reject if overlaps existing booking (BOOKED/PENDING/CONFIRMED)
+    const conflict = bookings.find((b) => {
+      const bStart = new Date(b.startTime).getTime();
+      const bEnd = new Date(b.endTime).getTime();
+      const s = startTime.getTime();
+      const e = s + 30 * 60 * 1000;
+      const isActive = b.status !== 'CANCELLED';
+      return b.courtId === courtId && s < bEnd && e > bStart && isActive;
+    });
+    if (conflict) {
+      const msg =
+        conflict.status === 'PENDING_PAYMENT'
+          ? `Slot này đang được giữ (chờ thanh toán). Hãy thử lại sau.`
+          : 'Slot này đã được đặt';
+      alert(msg);
+      return;
+    }
+
+    const slotTs = startTime.getTime();
+
+    if (selectedCourtId !== courtId) {
+      setSelectedCourtId(courtId);
+      setSelectedSlots([slotTs]);
+      return;
+    }
+
+    // Same court: toggle
+    if (selectedSlots.includes(slotTs)) {
+      const next = selectedSlots.filter((ts) => ts !== slotTs);
+      setSelectedSlots(next);
+      if (next.length === 0) {
+        setSelectedCourtId(null);
+      }
+      return;
+    }
+
+    const next = [...selectedSlots, slotTs].sort((a, b) => a - b);
+    // Ensure contiguity (30-minute steps)
+    const contiguous = next.every((ts, idx) => idx === 0 || ts - next[idx - 1] === 30 * 60 * 1000);
+    if (!contiguous) {
+      alert('Vui lòng chọn các khung 30p liên tiếp trong cùng một sân.');
+      return;
+    }
+    setSelectedSlots(next);
+  };
+
+  const handleConfirmBooking = () => {
+    if (!selectedRange) return;
+    createBooking({ courtId: selectedRange.courtId, startTime: selectedRange.start, endTime: selectedRange.end });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-white p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            📅 Đặt Sân Badminton
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+            📅 Đặt lịch ngày trực quan
           </h1>
-          <p className="text-gray-600">Chọn sân, ngày, và giờ bạn muốn đặt</p>
+          <p className="text-gray-600">Chọn sân và giờ để đặt sân</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left: Court Selection */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4">🏸 Chọn Sân</h2>
+        {/* Date Selector */}
+        <div className="mb-6 bg-white rounded-lg shadow p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+            >
+              ← Hôm trước
+            </button>
 
-              {courtsLoading ? (
-                <p className="text-gray-500">Đang tải sân...</p>
-              ) : (
-                <div className="space-y-2">
-                  {courts?.map((court) => (
-                    <button
-                      key={court.id}
-                      onClick={() => {
-                        setSelectedCourt(court);
-                        setSelectedSlot(null);
-                      }}
-                      className={`w-full p-3 rounded-lg text-left transition ${
-                        selectedCourt?.id === court.id
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      }`}
-                    >
-                      <div className="font-semibold">{court.name}</div>
-                      <div className="text-sm">
-                        {new Intl.NumberFormat('vi-VN', {
-                          style: 'currency',
-                          currency: 'VND',
-                        }).format(Number(court.pricePerHour))}{' '}
-                        /giờ
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <h2 className="text-2xl font-bold text-center">
+              {format(selectedDate, 'dd/MM/yyyy')}
+            </h2>
+
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+            >
+              Hôm sau →
+            </button>
           </div>
 
-          {/* Center: Date & Time Selection */}
-          <div className="lg:col-span-2">
-            {selectedCourt && (
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      onClick={() => handleDateChange(-1)}
-                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                    >
-                      ←
-                    </button>
-                    <h2 className="text-2xl font-bold">
-                      {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-                    </h2>
-                    <button
-                      onClick={() => handleDateChange(1)}
-                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                    >
-                      →
-                    </button>
-                  </div>
+          {/* Quick date shortcuts */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+              <button
+                key={day}
+                onClick={() => setSelectedDate(addDays(new Date(), day))}
+                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${
+                  format(selectedDate, 'yyyy-MM-dd') ===
+                  format(addDays(new Date(), day), 'yyyy-MM-dd')
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                }`}
+              >
+                {day === 0 ? 'Hôm nay' : day === 1 ? 'Ngày mai' : 'T' + (2 + day)}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                  {/* Quick date shortcuts */}
-                  <div className="flex gap-2">
-                    {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                      <button
-                        key={day}
-                        onClick={() => setSelectedDate(addDays(new Date(), day))}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                          format(selectedDate, 'yyyy-MM-dd') ===
-                          format(addDays(new Date(), day), 'yyyy-MM-dd')
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                        }`}
-                      >
-                        {day === 0
-                          ? 'Hôm nay'
-                          : day === 1
-                            ? 'Ngày mai'
-                            : 'T' + (2 + day)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+        {/* Timeline Grid */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <TimelineResourceGrid
+            courts={courts || []}
+            bookings={bookings}
+            date={selectedDate}
+            startHour={6}
+            endHour={21}
+            onSlotToggle={handleSlotToggle}
+            selectedRange={selectedRange}
+            isLoading={courtsLoading || bookingsLoading}
+          />
+        </div>
 
-                {/* Available Slots */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">
-                    ⏰ Giờ trống ({selectedCourt.name})
-                  </h3>
-
-                  {slotsLoading ? (
-                    <p className="text-gray-500">Đang tải giờ trống...</p>
-                  ) : availableSlots?.length === 0 ? (
-                    <p className="text-gray-500">
-                      Không có giờ trống cho ngày này
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {availableSlots?.map((slot, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedSlot(slot)}
-                          className={`p-3 rounded-lg font-medium transition ${
-                            selectedSlot?.startTime === slot.startTime
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-100 text-gray-900 hover:bg-indigo-100'
-                          }`}
-                        >
-                          {slot.startTime} - {slot.endTime}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Pricing Info */}
-                {pricing && selectedSlot && (
-                  <div className="mt-6 p-4 bg-gradient-to-r from-indigo-100 to-blue-100 rounded-lg">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Giá/Giờ</p>
-                        <p className="text-lg font-bold text-indigo-600">
-                          {new Intl.NumberFormat('vi-VN', {
-                            style: 'currency',
-                            currency: 'VND',
-                          }).format(pricing.pricePerHour)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Tổng Tiền</p>
-                        <p className="text-lg font-bold text-indigo-600">
-                          {new Intl.NumberFormat('vi-VN', {
-                            style: 'currency',
-                            currency: 'VND',
-                          }).format(pricing.totalPrice)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Thời Gian</p>
-                        <p className="text-lg font-bold text-indigo-600">1 giờ</p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => createBooking()}
-                      disabled={isBooking}
-                      className="w-full mt-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition"
-                    >
-                      {isBooking ? 'Đang tạo...' : '✓ Xác nhận đặt sân'}
-                    </button>
-                  </div>
-                )}
-              </div>
+        {/* Selected summary & actions */}
+        <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="text-sm text-gray-700">
+            {selectedRange ? (
+              <>
+                <span className="font-semibold">Đang chọn:</span>{' '}
+                Sân {selectedRange.courtId} • {format(selectedRange.start, 'HH:mm')} -{' '}
+                {format(selectedRange.end, 'HH:mm')}
+              </>
+            ) : (
+              'Chọn khung giờ 30p liên tiếp để đặt.'
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+              onClick={() => {
+                setSelectedSlots([]);
+                setSelectedCourtId(null);
+              }}
+            >
+              Bỏ chọn
+            </button>
+            <button
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-50"
+              disabled={!selectedRange || isBooking}
+              onClick={handleConfirmBooking}
+            >
+              {isBooking ? 'Đang đặt...' : 'Xác nhận đặt sân'}
+            </button>
           </div>
         </div>
 
         {/* Info Section */}
         <div className="mt-8 bg-blue-50 rounded-lg p-6 border border-blue-200">
-          <h3 className="text-lg font-bold text-blue-900 mb-2">ℹ️ Thông Tin</h3>
-          <ul className="text-blue-800 space-y-1">
-            <li>• Giờ hoạt động: 6:00 - 21:00</li>
-            <li>• Giá cơ bản: 50,000 VND/giờ (6:00-17:00)</li>
-            <li>• Giá cao điểm: 75,000 VND/giờ (17:00-21:00)</li>
-            <li>• Thanh toán: Wallet hoặc VNPay/MoMo</li>
-          </ul>
+          <h3 className="text-lg font-bold text-blue-900 mb-4">ℹ️ Hướng dẫn sử dụng</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
+            <div>
+              <p className="font-semibold mb-2">Thời gian hoạt động:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>6:00 - 21:00 hàng ngày</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-2">Cách đặt sân:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Click vào khung giờ trống để đặt</li>
+                <li>Chọn thời lượng đặt (30p, 60p, v.v.)</li>
+                <li>Xác nhận để hoàn tất đặt sân</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>

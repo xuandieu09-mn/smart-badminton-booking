@@ -12,7 +12,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { CourtsService } from './courts.service';
-import { CreateCourtDto, UpdateCourtDto, FilterCourtsDto } from './dto';
+import { CreateCourtDto, UpdateCourtDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -23,6 +23,43 @@ export class CourtsController {
   constructor(private readonly courtsService: CourtsService) {}
 
   /**
+   * GET /courts
+   * Get all courts
+   */
+  @Get()
+  async findAll(@Query('isActive') isActive?: string) {
+    const active =
+      isActive === 'true' ? true : isActive === 'false' ? false : undefined;
+    return this.courtsService.findAll(active);
+  }
+
+  /**
+   * GET /courts/:id
+   * Get court by ID
+   */
+  @Get(':id')
+  async findById(@Param('id') id: string) {
+    return this.courtsService.findById(Number(id));
+  }
+
+  /**
+   * GET /courts/:id/availability?date=2025-12-07
+   * Get court availability with time slots and pricing for a specific date
+   */
+  @Get(':id/availability')
+  async getAvailability(
+    @Param('id') courtId: string,
+    @Query('date') date?: string,
+  ) {
+    if (!date) {
+      const today = new Date().toISOString().split('T')[0];
+      return this.courtsService.getCourtAvailability(Number(courtId), today);
+    }
+    return this.courtsService.getCourtAvailability(Number(courtId), date);
+  }
+
+  /**
+   * POST /courts
    * Create a new court (Admin only)
    */
   @Post()
@@ -33,72 +70,7 @@ export class CourtsController {
   }
 
   /**
-   * Get all courts
-   */
-  @Get()
-  async findAll(@Query() filters?: FilterCourtsDto) {
-    return this.courtsService.findAll(filters);
-  }
-
-  /**
-   * Get court by ID
-   */
-  @Get(':id')
-  async findById(@Param('id') id: string) {
-    return this.courtsService.findById(Number(id));
-  }
-
-  /**
-   * Get available time slots for a court on a specific date
-   */
-  @Get(':id/available-slots')
-  async getAvailableSlots(
-    @Param('id') id: string,
-    @Query('date') date: string,
-  ) {
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return { error: 'Invalid date format. Use ISO format: YYYY-MM-DD' };
-    }
-
-    return this.courtsService.getAvailableSlots(Number(id), parsedDate);
-  }
-
-  /**
-   * Get court with pricing for specific time slot
-   */
-  @Get(':id/pricing')
-  async getCourtWithPrice(
-    @Param('id') id: string,
-    @Query('startTime') startTime: string,
-    @Query('endTime') endTime: string,
-  ) {
-    return this.courtsService.getCourtWithPrice(
-      Number(id),
-      new Date(startTime),
-      new Date(endTime),
-    );
-  }
-
-  /**
-   * Check if court is available for time slot
-   */
-  @Get(':id/is-available')
-  async isAvailable(
-    @Param('id') id: string,
-    @Query('startTime') startTime: string,
-    @Query('endTime') endTime: string,
-  ) {
-    const available = await this.courtsService.isAvailable(
-      Number(id),
-      new Date(startTime),
-      new Date(endTime),
-    );
-
-    return { available };
-  }
-
-  /**
+   * PUT /courts/:id
    * Update court (Admin only)
    */
   @Put(':id')
@@ -109,6 +81,7 @@ export class CourtsController {
   }
 
   /**
+   * DELETE /courts/:id
    * Delete court (Admin only)
    */
   @Delete(':id')
@@ -116,6 +89,6 @@ export class CourtsController {
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string) {
-    await this.courtsService.delete(Number(id));
+    return this.courtsService.delete(Number(id));
   }
 }
