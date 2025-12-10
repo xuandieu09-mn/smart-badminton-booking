@@ -139,13 +139,20 @@
 .timeline-slot {
   position: absolute;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  opacity: 0.05;
+  transition: opacity 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .timeline-slot:hover {
-  opacity: 0.1;
+  opacity: 0.18;
   background: #3b82f6;
+}
+
+.timeline-slot.selected {
+  opacity: 0.75;
+  background: #fef08a;
+  box-shadow: inset 0 0 0 2px #f59e0b;
+  z-index: 5;
 }
 
 /* Booking block (khối lịch đặt sân) */

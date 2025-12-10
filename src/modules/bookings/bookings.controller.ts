@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto } from './dto';
+import { CreateBookingDto, CreateBulkBookingDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -33,6 +33,38 @@ export class BookingsController {
     @CurrentUser() user: JwtUser,
   ) {
     return this.bookingsService.createBooking(dto, user.id, user.role);
+  }
+
+  /**
+   * 🎟️ Staff/Admin check-in booking by ID
+   */
+  @Post(':id/check-in')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async checkInBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.checkInBooking(id, user.id, user.role);
+  }
+
+  /**
+   * 🔎 Find booking by booking code
+   */
+  @Get('code/:code')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getBookingByCode(@Param('code') code: string) {
+    return this.bookingsService.getBookingByCode(code);
+  }
+
+  /**
+   * 🎯 Bulk create bookings (multiple courts/time slots in one transaction)
+   */
+  @Post('bulk')
+  async createBulkBooking(
+    @Body() dto: CreateBulkBookingDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.createBulkBooking(dto, user.id, user.role);
   }
 
   /**

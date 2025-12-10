@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { parseISO, differenceInMinutes, format } from 'date-fns';
 import { Court } from '../../../types/court.types';
 import './TimelineResourceGrid.css';
@@ -20,8 +20,10 @@ interface TimelineResourceGridProps {
   date: Date;
   startHour?: number;
   endHour?: number;
-  selectedRange?: { courtId: number; start: Date; end: Date } | null;
-  onSlotToggle?: (courtId: number, startTime: Date) => void;
+  selectedSlots?: { courtId: number; startTime: Date }[];
+  onSlotToggle?: (
+    slot: { courtId: number; courtName: string; courtPricePerHour: number; startTime: Date },
+  ) => void;
   isLoading?: boolean;
 }
 
@@ -61,12 +63,10 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
   date,
   startHour = DEFAULT_START_HOUR,
   endHour = DEFAULT_END_HOUR,
-  selectedRange,
+  selectedSlots = [],
   onSlotToggle,
   isLoading = false,
 }) => {
-  const [hoveredSlot, setHoveredSlot] = useState<{ courtId: number; hour: number } | null>(null);
-
   // Tạo danh sách giờ từ startHour đến endHour
   const hours = useMemo(() => {
     const result = [];
@@ -116,16 +116,30 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
     return bookingBlocks.filter((block) => block.courtId === courtId);
   };
 
-  const handleSlotToggle = (courtId: number, hour: number, minute: number = 0) => {
+  const handleSlotToggle = (
+    court: Court,
+    hour: number,
+    minute: number = 0,
+  ) => {
     if (!onSlotToggle) return;
 
     const slotTime = new Date(date);
     slotTime.setHours(hour, minute, 0, 0);
-    onSlotToggle(courtId, slotTime);
+    onSlotToggle({
+      courtId: court.id,
+      courtName: court.name,
+      courtPricePerHour: Number(court.pricePerHour),
+      startTime: slotTime,
+    });
   };
 
   const totalHours = endHour - startHour;
   const totalWidthPx = totalHours * SLOT_WIDTH_PX;
+
+  const isSlotSelected = (courtId: number, startTime: Date) =>
+    selectedSlots.some(
+      (slot) => slot.courtId === courtId && slot.startTime.getTime() === startTime.getTime(),
+    );
 
   return (
     <div className="timeline-resource-grid-container">
@@ -213,90 +227,94 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                     <React.Fragment key={`slots-${hour}`}>
                       {/* 0-30 min */}
                       <div
-                        className="timeline-slot"
+                        className={`timeline-slot ${
+                          isSlotSelected(
+                            court.id,
+                            new Date(new Date(date).setHours(hour, 0, 0, 0)),
+                          )
+                            ? 'selected'
+                            : ''
+                        }`}
                         style={{
                           left: (hour - startHour) * SLOT_WIDTH_PX,
                           width: SLOT_WIDTH_PX / 2,
                           height: ROW_HEIGHT_PX,
+                          ...(isSlotSelected(
+                            court.id,
+                            new Date(new Date(date).setHours(hour, 0, 0, 0)),
+                          )
+                            ? {
+                                backgroundColor: '#fef08a',
+                                boxShadow: 'inset 0 0 0 2px #f59e0b',
+                                opacity: 0.75,
+                              }
+                            : {}),
                         }}
-                        onMouseEnter={() => setHoveredSlot({ courtId: court.id, hour })}
-                        onMouseLeave={() => setHoveredSlot(null)}
-                        onClick={() => handleSlotToggle(court.id, hour, 0)}
+                        onClick={() => handleSlotToggle(court, hour, 0)}
                       />
 
                       {/* 30-60 min */}
                       <div
-                        className="timeline-slot"
+                        className={`timeline-slot ${
+                          isSlotSelected(
+                            court.id,
+                            new Date(new Date(date).setHours(hour, 30, 0, 0)),
+                          )
+                            ? 'selected'
+                            : ''
+                        }`}
                         style={{
                           left: (hour - startHour) * SLOT_WIDTH_PX + SLOT_WIDTH_PX / 2,
                           width: SLOT_WIDTH_PX / 2,
                           height: ROW_HEIGHT_PX,
+                          ...(isSlotSelected(
+                            court.id,
+                            new Date(new Date(date).setHours(hour, 30, 0, 0)),
+                          )
+                            ? {
+                                backgroundColor: '#fef08a',
+                                boxShadow: 'inset 0 0 0 2px #f59e0b',
+                                opacity: 0.75,
+                              }
+                            : {}),
                         }}
-                        onMouseEnter={() => setHoveredSlot({ courtId: court.id, hour })}
-                        onMouseLeave={() => setHoveredSlot(null)}
-                        onClick={() => handleSlotToggle(court.id, hour, 30)}
+                        onClick={() => handleSlotToggle(court, hour, 30)}
                       />
                     </React.Fragment>
                   ))}
-
-              {/* Booking blocks */}
-              {getCourtBookings(court.id).map((block) => (
-                <div
-                  key={`booking-${block.id}`}
-                  className="timeline-booking-block"
-                  style={{
-                    left: block.leftPx,
-                    width: Math.max(block.widthPx, 30), // Min width to show label
-                    backgroundColor: block.style.bg,
-                    color: block.style.text,
-                    height: ROW_HEIGHT_PX * 0.8,
-                    top: ROW_HEIGHT_PX * 0.1,
-                  }}
-                  title={`${block.style.label} - ${block.durationMinutes}min${
-                    block.style.remainingSeconds
-                      ? ` (${Math.ceil(block.style.remainingSeconds / 60)}p còn lại)`
-                      : ''
-                  }`}
-                >
-                  <div className="timeline-booking-label">
-                    {block.durationMinutes >= 30 && (
-                      <>
-                        <div className="text-xs font-bold">{block.bookingCode}</div>
-                        {block.style.remainingSeconds ? (
-                          <div className="text-xs">⏱ {Math.ceil(block.style.remainingSeconds / 60)}p</div>
-                        ) : (
-                          <div className="text-xs">{block.durationMinutes}p</div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}                  {/* Selected range block */}
-                  {selectedRange && selectedRange.courtId === court.id && (
+                  {/* Booking blocks */}
+                  {getCourtBookings(court.id).map((block) => (
                     <div
-                      className="timeline-selection-block"
+                      key={`booking-${block.id}`}
+                      className="timeline-booking-block"
                       style={{
-                        left:
-                          ((selectedRange.start.getHours() * 60 + selectedRange.start.getMinutes()) -
-                            startHour * 60) /
-                          60 *
-                          SLOT_WIDTH_PX,
-                        width:
-                          ((selectedRange.end.getTime() - selectedRange.start.getTime()) / 60000 / 60) *
-                          SLOT_WIDTH_PX,
+                        left: block.leftPx,
+                        width: Math.max(block.widthPx, 30), // Min width to show label
+                        backgroundColor: block.style.bg,
+                        color: block.style.text,
                         height: ROW_HEIGHT_PX * 0.8,
                         top: ROW_HEIGHT_PX * 0.1,
                       }}
-                      title={`Đang chọn: ${format(selectedRange.start, 'HH:mm')} - ${format(
-                        selectedRange.end,
-                        'HH:mm',
-                      )}`}
+                      title={`${block.style.label} - ${block.durationMinutes}min${
+                        block.style.remainingSeconds
+                          ? ` (${Math.ceil(block.style.remainingSeconds / 60)}p còn lại)`
+                          : ''
+                      }`}
                     >
-                      <div className="timeline-selection-label">
-                        <div className="text-xs font-semibold text-white">Đang chọn</div>
+                      <div className="timeline-booking-label">
+                        {block.durationMinutes >= 30 && (
+                          <>
+                            <div className="text-xs font-bold">{block.bookingCode}</div>
+                            {block.style.remainingSeconds ? (
+                              <div className="text-xs">⏱ {Math.ceil(block.style.remainingSeconds / 60)}p</div>
+                            ) : (
+                              <div className="text-xs">{block.durationMinutes}p</div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               ))}
             </div>

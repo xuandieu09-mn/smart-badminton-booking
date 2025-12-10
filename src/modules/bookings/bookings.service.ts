@@ -429,4 +429,225 @@ export class BookingsService {
       },
     });
   }
+
+  /**
+   * 🎯 Create multiple bookings in a single transaction (Bulk Booking)
+   * All-or-Nothing: nếu bất kỳ booking nào lỗi, tất cả rollback
+   */
+  async createBulkBooking(
+    dto: any, // CreateBulkBookingDto
+    userId: number | null,
+    userRole: Role,
+  ) {
+    const { bookings: bookingItems, type, paymentMethod, guestName, guestPhone } = dto;
+
+    if (!bookingItems || bookingItems.length === 0) {
+      throw new BadRequestException('Phải chọn ít nhất 1 khung giờ');
+    }
+
+    // 1️⃣ Pre-validate all bookings before transaction
+    const validatedBookings = [];
+
+    for (const item of bookingItems) {
+      const start = new Date(item.startTime);
+      const end = new Date(item.endTime);
+
+      // Validate time
+      if (start >= end) {
+        throw new BadRequestException(`Giờ kết thúc phải sau giờ bắt đầu (sân ${item.courtId})`);
+      }
+
+      if (start < new Date()) {
+        throw new BadRequestException(`Không thể đặt trong quá khứ (sân ${item.courtId})`);
+      }
+
+      // Validate court exists
+      const court = await this.prisma.court.findUnique({
+        where: { id: item.courtId },
+      });
+
+      if (!court) {
+        throw new NotFoundException(`Sân ${item.courtId} không tồn tại`);
+      }
+
+      if (!court.isActive) {
+        throw new BadRequestException(`Sân ${item.courtId} không khả dụng`);
+      }
+
+      // Check conflict with existing bookings
+      const conflict = await this.prisma.booking.findFirst({
+        where: {
+          courtId: item.courtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          OR: [
+            {
+              startTime: { lt: end },
+              endTime: { gt: start },
+            },
+          ],
+        },
+      });
+
+      if (conflict) {
+        throw new ConflictException(
+          `Sân ${item.courtId} đã bị đặt từ ${conflict.startTime.toISOString()} đến ${conflict.endTime.toISOString()}`,
+        );
+      }
+
+      // Calculate price
+      const totalPrice = await this.calculatePrice(item.courtId, start, end);
+
+      validatedBookings.push({
+        ...item,
+        start,
+        end,
+        totalPrice,
+        court,
+      });
+    }
+
+    // 2️⃣ Execute transaction: create all bookings atomically
+    const bookingType = type || BookingType.REGULAR;
+    const isGuestBooking = guestName && guestPhone;
+    const finalUserId = isGuestBooking ? null : userId;
+
+    let status: BookingStatus;
+    let paymentStatus: PaymentStatus;
+    let expiresAt: Date | null = null;
+
+    if (isGuestBooking) {
+      status = BookingStatus.CONFIRMED;
+      paymentStatus = PaymentStatus.PAID;
+    } else if (bookingType === BookingType.MAINTENANCE) {
+      status = BookingStatus.BLOCKED;
+      paymentStatus = PaymentStatus.PAID;
+    } else if (paymentMethod === PaymentMethod.CASH) {
+      status = BookingStatus.CONFIRMED;
+      paymentStatus = PaymentStatus.PAID;
+    } else {
+      status = BookingStatus.PENDING_PAYMENT;
+      paymentStatus = PaymentStatus.UNPAID;
+      expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    }
+
+    try {
+      const createdBookings = await this.prisma.$transaction(async (tx) => {
+        const results = [];
+
+        for (const validated of validatedBookings) {
+          const bookingCode = await this.generateBookingCode();
+
+          const booking = await tx.booking.create({
+            data: {
+              bookingCode,
+              courtId: validated.courtId,
+              userId: finalUserId,
+              guestName: isGuestBooking ? guestName : null,
+              guestPhone: isGuestBooking ? guestPhone : null,
+              startTime: validated.start,
+              endTime: validated.end,
+              totalPrice: validated.totalPrice,
+              status,
+              type: bookingType,
+              paymentMethod: paymentMethod || null,
+              paymentStatus,
+              createdBy:
+                userRole === Role.STAFF || userRole === Role.ADMIN ? 'STAFF' : 'CUSTOMER',
+              createdByStaffId:
+                userRole === Role.STAFF || userRole === Role.ADMIN ? userId : null,
+              expiresAt,
+            },
+            include: {
+              court: true,
+            },
+          });
+
+          results.push(booking);
+
+          // Add expiration job if PENDING_PAYMENT
+          if (status === BookingStatus.PENDING_PAYMENT && expiresAt) {
+            const delay = expiresAt.getTime() - Date.now();
+            await this.bookingQueue.add(
+              JOB_NAMES.EXPIRE_BOOKING,
+              { bookingId: booking.id },
+              {
+                delay,
+                jobId: `expire-booking-${booking.id}`,
+                removeOnComplete: true,
+                removeOnFail: false,
+              },
+            );
+          }
+        }
+
+        return results;
+      });
+
+      // 3️⃣ Return all created bookings
+      return {
+        message: `Đã tạo ${createdBookings.length} booking thành công`,
+        bookings: createdBookings,
+        totalPrice: createdBookings.reduce((sum, b) => sum + Number(b.totalPrice), 0),
+      };
+    } catch (error) {
+      // Transaction automatically rolled back on error
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Lỗi tạo bulk booking: ${error.message}`);
+    }
+  }
+
+  async getBookingByCode(code: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { bookingCode: code },
+      include: {
+        court: true,
+        user: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    return booking;
+  }
+
+  /**
+   * Staff/Admin check-in a booking by id
+   */
+  async checkInBooking(bookingId: number, staffId: number, staffRole: Role) {
+    if (![Role.STAFF, Role.ADMIN].includes(staffRole)) {
+      throw new ForbiddenException('Only staff/admin can check in bookings');
+    }
+
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if ([BookingStatus.CANCELLED, BookingStatus.CANCELLED_LATE, BookingStatus.EXPIRED].includes(booking.status)) {
+      throw new BadRequestException('Cannot check in a cancelled or expired booking');
+    }
+
+    if (booking.status === BookingStatus.COMPLETED) {
+      return booking; // already completed
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CHECKED_IN,
+        paymentStatus: booking.paymentStatus === PaymentStatus.PAID ? PaymentStatus.PAID : PaymentStatus.PAID,
+        checkedInAt: new Date(),
+        checkedInByStaffId: staffId,
+      },
+    });
+
+    return updated;
+  }
 }
+

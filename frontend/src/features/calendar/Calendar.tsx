@@ -3,15 +3,20 @@ import { format, addDays } from 'date-fns';
 import { useCourts } from './hooks/useCourts';
 import { useAllCourtBookingsByDate } from './hooks/useCourtBookings';
 import { usePollBookings } from './hooks/usePollBookings';
-import TimelineResourceGrid, { TimelineBooking } from './components/TimelineResourceGrid';
-import { useMutation } from '@tanstack/react-query';
-import apiClient from '../../services/api/client';
+import { useCreateBulkBooking } from './hooks/useCreateBulkBooking';
+import TimelineResourceGrid from './components/TimelineResourceGrid';
 import './components/TimelineResourceGrid.css';
+
+type SelectedSlot = {
+  courtId: number;
+  courtName: string;
+  startTime: Date;
+  price: number;
+};
 
 export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedCourtId, setSelectedCourtId] = useState<number | null>(null);
-  const [selectedSlots, setSelectedSlots] = useState<number[]>([]); // timestamps (ms) per 30m slot
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -21,41 +26,46 @@ export const Calendar: React.FC = () => {
   // Polling real-time bookings mỗi 5 giây
   usePollBookings(dateStr, 5000);
 
-  const { mutate: createBooking, isPending: isBooking } = useMutation({
-    mutationFn: async (params: { courtId: number; startTime: Date; endTime: Date }) => {
-      return apiClient.post('/bookings', {
-        courtId: params.courtId,
-        startTime: params.startTime.toISOString(),
-        endTime: params.endTime.toISOString(),
-      });
-    },
-    onSuccess: (response) => {
-      alert('Booking created! Booking Code: ' + response.data.booking?.bookingCode);
-      setSelectedSlots([]);
-      setSelectedCourtId(null);
-    },
-    onError: (error: any) => {
-      alert('Error creating booking: ' + (error.response?.data?.message || error.message));
-    },
-  });
+  const { mutate: createBulkBooking, isPending: isBooking } = useCreateBulkBooking();
 
-  const selectedRange = useMemo(() => {
-    if (!selectedCourtId || selectedSlots.length === 0) return null;
-    const sorted = [...selectedSlots].sort((a, b) => a - b);
-    const start = new Date(sorted[0]);
-    const end = new Date(sorted[sorted.length - 1] + 30 * 60 * 1000);
-    return { courtId: selectedCourtId, start, end };
-  }, [selectedCourtId, selectedSlots]);
+  const totalSelectedPrice = useMemo(
+    () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0),
+    [selectedSlots],
+  );
 
-  const handleSlotToggle = (courtId: number, startTime: Date) => {
-    // Reject if overlaps existing booking (BOOKED/PENDING/CONFIRMED)
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.max(value, 0));
+
+  const computeSlotPrice = (court: { pricePerHour: number }, startTime: Date) => {
+    const base = Number(court.pricePerHour) || 0;
+    const hour = startTime.getHours();
+    const day = startTime.getDay(); // 0 = Sun, 5 = Fri, 6 = Sat
+    const isFriToSun = day === 5 || day === 6 || day === 0;
+
+    let multiplier = 1;
+    if (isFriToSun && hour >= 19 && hour < 21) {
+      multiplier = 2; // PEAK Fri-Sun 19-21h
+    } else if (hour >= 17 && hour < 21) {
+      multiplier = 1.5; // GOLDEN 17-21h
+    }
+
+    return (base * multiplier) / 2; // 30-minute slot
+  };
+
+  const handleSlotToggle = (slot: {
+    courtId: number;
+    courtName: string;
+    courtPricePerHour: number;
+    startTime: Date;
+  }) => {
+    const slotStartMs = slot.startTime.getTime();
+    const slotEndMs = slotStartMs + 30 * 60 * 1000;
+
     const conflict = bookings.find((b) => {
       const bStart = new Date(b.startTime).getTime();
       const bEnd = new Date(b.endTime).getTime();
-      const s = startTime.getTime();
-      const e = s + 30 * 60 * 1000;
       const isActive = b.status !== 'CANCELLED';
-      return b.courtId === courtId && s < bEnd && e > bStart && isActive;
+      return b.courtId === slot.courtId && slotStartMs < bEnd && slotEndMs > bStart && isActive;
     });
     if (conflict) {
       const msg =
@@ -66,37 +76,45 @@ export const Calendar: React.FC = () => {
       return;
     }
 
-    const slotTs = startTime.getTime();
+    const existingIdx = selectedSlots.findIndex(
+      (selected) => selected.courtId === slot.courtId && selected.startTime.getTime() === slotStartMs,
+    );
 
-    if (selectedCourtId !== courtId) {
-      setSelectedCourtId(courtId);
-      setSelectedSlots([slotTs]);
-      return;
-    }
-
-    // Same court: toggle
-    if (selectedSlots.includes(slotTs)) {
-      const next = selectedSlots.filter((ts) => ts !== slotTs);
+    if (existingIdx !== -1) {
+      const next = [...selectedSlots];
+      next.splice(existingIdx, 1);
       setSelectedSlots(next);
-      if (next.length === 0) {
-        setSelectedCourtId(null);
-      }
       return;
     }
 
-    const next = [...selectedSlots, slotTs].sort((a, b) => a - b);
-    // Ensure contiguity (30-minute steps)
-    const contiguous = next.every((ts, idx) => idx === 0 || ts - next[idx - 1] === 30 * 60 * 1000);
-    if (!contiguous) {
-      alert('Vui lòng chọn các khung 30p liên tiếp trong cùng một sân.');
-      return;
-    }
+    const price = computeSlotPrice({ pricePerHour: slot.courtPricePerHour }, slot.startTime);
+    const next = [...selectedSlots, { courtId: slot.courtId, courtName: slot.courtName, startTime: slot.startTime, price }];
+    next.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     setSelectedSlots(next);
   };
 
   const handleConfirmBooking = () => {
-    if (!selectedRange) return;
-    createBooking({ courtId: selectedRange.courtId, startTime: selectedRange.start, endTime: selectedRange.end });
+    if (selectedSlots.length === 0) return;
+
+    const bulkPayload = {
+      bookings: selectedSlots.map((slot) => ({
+        courtId: slot.courtId,
+        startTime: slot.startTime.toISOString(),
+        endTime: new Date(slot.startTime.getTime() + 30 * 60 * 1000).toISOString(),
+      })),
+    };
+
+    createBulkBooking(bulkPayload, {
+      onSuccess: (response) => {
+        alert(
+          `✅ ${response.bookings?.length || selectedSlots.length} booking(s) created!\nBooking codes: ${response.bookings?.map((b: any) => b.bookingCode).join(', ') || 'pending'}`,
+        );
+        setSelectedSlots([]);
+      },
+      onError: (error: any) => {
+        alert('❌ Error: ' + (error.response?.data?.message || error.message));
+      },
+    });
   };
 
   return (
@@ -160,7 +178,7 @@ export const Calendar: React.FC = () => {
             startHour={6}
             endHour={21}
             onSlotToggle={handleSlotToggle}
-            selectedRange={selectedRange}
+            selectedSlots={selectedSlots}
             isLoading={courtsLoading || bookingsLoading}
           />
         </div>
@@ -168,14 +186,13 @@ export const Calendar: React.FC = () => {
         {/* Selected summary & actions */}
         <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="text-sm text-gray-700">
-            {selectedRange ? (
+            {selectedSlots.length > 0 ? (
               <>
                 <span className="font-semibold">Đang chọn:</span>{' '}
-                Sân {selectedRange.courtId} • {format(selectedRange.start, 'HH:mm')} -{' '}
-                {format(selectedRange.end, 'HH:mm')}
+                {selectedSlots.length} slot • Tổng: {formatCurrency(totalSelectedPrice)}
               </>
             ) : (
-              'Chọn khung giờ 30p liên tiếp để đặt.'
+              'Chọn các khung 30p bất kỳ (đa sân) để đặt.'
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -183,14 +200,13 @@ export const Calendar: React.FC = () => {
               className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
               onClick={() => {
                 setSelectedSlots([]);
-                setSelectedCourtId(null);
               }}
             >
               Bỏ chọn
             </button>
             <button
               className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-50"
-              disabled={!selectedRange || isBooking}
+              disabled={selectedSlots.length === 0 || isBooking}
               onClick={handleConfirmBooking}
             >
               {isBooking ? 'Đang đặt...' : 'Xác nhận đặt sân'}
