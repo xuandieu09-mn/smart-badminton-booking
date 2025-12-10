@@ -14,13 +14,22 @@ export interface TimelineBooking {
   expiresAt?: string | null; // ISO datetime for PENDING_PAYMENT countdown
 }
 
+// NEW: Selected slot type for bulk booking
+type SelectedSlot = {
+  courtId: number;
+  courtName: string;
+  startTime: Date;
+  endTime: Date;
+  price: number;
+};
+
 interface TimelineResourceGridProps {
   courts: Court[];
   bookings: TimelineBooking[];
   date: Date;
   startHour?: number;
   endHour?: number;
-  selectedRange?: { courtId: number; start: Date; end: Date } | null;
+  selectedSlots?: SelectedSlot[]; // NEW: Array of selected slots
   onSlotToggle?: (courtId: number, startTime: Date) => void;
   isLoading?: boolean;
 }
@@ -61,7 +70,7 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
   date,
   startHour = DEFAULT_START_HOUR,
   endHour = DEFAULT_END_HOUR,
-  selectedRange,
+  selectedSlots = [], // NEW: Array-based selected slots
   onSlotToggle,
   isLoading = false,
 }) => {
@@ -271,35 +280,53 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                     )}
                   </div>
                 </div>
-              ))}                  {/* Selected range block */}
-                  {selectedRange && selectedRange.courtId === court.id && (
+              ))}
+
+              {/* NEW: Multi-slot selection highlights - render all selected slots */}
+              {selectedSlots
+                .filter((slot) => slot.courtId === court.id)
+                .map((slot, idx) => {
+                  const startOffsetMinutes =
+                    slot.startTime.getHours() * 60 +
+                    slot.startTime.getMinutes() -
+                    startHour * 60;
+                  const leftPx = (startOffsetMinutes / 60) * SLOT_WIDTH_PX;
+                  const durationMinutes =
+                    (slot.endTime.getTime() - slot.startTime.getTime()) / 60000;
+                  const widthPx = (durationMinutes / 60) * SLOT_WIDTH_PX;
+
+                  return (
                     <div
+                      key={`selected-${slot.courtId}-${slot.startTime.getTime()}-${idx}`}
                       className="timeline-selection-block"
                       style={{
-                        left:
-                          ((selectedRange.start.getHours() * 60 + selectedRange.start.getMinutes()) -
-                            startHour * 60) /
-                          60 *
-                          SLOT_WIDTH_PX,
-                        width:
-                          ((selectedRange.end.getTime() - selectedRange.start.getTime()) / 60000 / 60) *
-                          SLOT_WIDTH_PX,
+                        left: leftPx,
+                        width: widthPx,
                         height: ROW_HEIGHT_PX * 0.8,
                         top: ROW_HEIGHT_PX * 0.1,
+                        backgroundColor: '#fbbf24', // Yellow for selected
+                        border: '2px solid #f59e0b',
+                        zIndex: 10,
                       }}
-                      title={`Đang chọn: ${format(selectedRange.start, 'HH:mm')} - ${format(
-                        selectedRange.end,
+                      title={`✅ Đã chọn: ${format(slot.startTime, 'HH:mm')} - ${format(
+                        slot.endTime,
                         'HH:mm',
-                      )}`}
+                      )} • ${new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                      }).format(slot.price)}`}
                     >
                       <div className="timeline-selection-label">
-                        <div className="text-xs font-semibold text-white">Đang chọn</div>
+                        <div className="text-xs font-bold text-gray-900">
+                          ✓ {format(slot.startTime, 'HH:mm')}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  );
+                })}
                 </div>
               ))}
-            </div>
+```            </div>
           </div>
         </div>
       )}

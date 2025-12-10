@@ -188,6 +188,173 @@ export class BookingsService {
   }
 
   /**
+   * 📦 Create bulk bookings (NEW: Multi-court bulk booking support)
+   * Creates multiple bookings in one transaction for better performance
+   */
+  async createBulkBookings(
+    bookings: CreateBookingDto[],
+    userId: number | null,
+    userRole: Role,
+  ) {
+    if (!bookings || bookings.length === 0) {
+      throw new BadRequestException('No bookings provided');
+    }
+
+    // Validate each booking and check for conflicts
+    const validatedBookings = [];
+
+    for (const dto of bookings) {
+      const { courtId, startTime, endTime } = dto;
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      // Validate time
+      if (start >= end) {
+        throw new BadRequestException(
+          `Invalid time range for court ${courtId}: End time must be after start time`,
+        );
+      }
+
+      if (start < new Date()) {
+        throw new BadRequestException('Cannot book in the past');
+      }
+
+      // Check court exists
+      const court = await this.prisma.court.findUnique({
+        where: { id: courtId },
+      });
+
+      if (!court) {
+        throw new NotFoundException(`Court ${courtId} not found`);
+      }
+
+      if (!court.isActive) {
+        throw new BadRequestException(`Court ${courtId} is not available`);
+      }
+
+      // Check for conflicts
+      const conflictBooking = await this.prisma.booking.findFirst({
+        where: {
+          courtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          OR: [
+            {
+              startTime: { lt: end },
+              endTime: { gt: start },
+            },
+          ],
+        },
+      });
+
+      if (conflictBooking) {
+        throw new ConflictException(
+          `Court ${courtId} is already booked from ${conflictBooking.startTime.toISOString()} to ${conflictBooking.endTime.toISOString()}`,
+        );
+      }
+
+      // Calculate price
+      const totalPrice = await this.calculatePrice(courtId, start, end);
+
+      validatedBookings.push({
+        dto,
+        court,
+        start,
+        end,
+        totalPrice,
+      });
+    }
+
+    // Create all bookings in a single transaction
+    const createdBookings = await this.prisma.$transaction(async (tx) => {
+      const results = [];
+
+      for (const { dto, start, end, totalPrice } of validatedBookings) {
+        const bookingCode = await this.generateBookingCode();
+        const isGuestBooking = dto.guestName && dto.guestPhone;
+        const bookingType = dto.type || BookingType.REGULAR;
+
+        let status: BookingStatus;
+        let expiresAt: Date | null = null;
+        let finalUserId: number | null = userId;
+
+        if (isGuestBooking) {
+          finalUserId = null;
+          status = BookingStatus.CONFIRMED;
+        } else if (bookingType === BookingType.MAINTENANCE) {
+          status = BookingStatus.BLOCKED;
+        } else if (dto.paymentMethod === PaymentMethod.CASH) {
+          status = BookingStatus.CONFIRMED;
+        } else {
+          status = BookingStatus.PENDING_PAYMENT;
+          expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        }
+
+        const newBooking = await tx.booking.create({
+          data: {
+            bookingCode,
+            courtId: dto.courtId,
+            userId: finalUserId,
+            guestName: isGuestBooking ? dto.guestName : null,
+            guestPhone: isGuestBooking ? dto.guestPhone : null,
+            startTime: start,
+            endTime: end,
+            totalPrice,
+            status,
+            type: bookingType,
+            paymentMethod: dto.paymentMethod || null,
+            paymentStatus:
+              status === BookingStatus.CONFIRMED
+                ? PaymentStatus.PAID
+                : PaymentStatus.UNPAID,
+            createdBy:
+              userRole === Role.STAFF || userRole === Role.ADMIN
+                ? 'STAFF'
+                : 'CUSTOMER',
+            createdByStaffId:
+              userRole === Role.STAFF || userRole === Role.ADMIN
+                ? userId
+                : null,
+            expiresAt,
+          },
+          include: {
+            court: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        // Schedule expiration job if needed
+        if (status === BookingStatus.PENDING_PAYMENT && expiresAt) {
+          const delay = expiresAt.getTime() - Date.now();
+          await this.bookingQueue.add(
+            JOB_NAMES.EXPIRE_BOOKING,
+            { bookingId: newBooking.id },
+            {
+              delay,
+              jobId: `expire-booking-${newBooking.id}`,
+              removeOnComplete: true,
+              removeOnFail: false,
+            },
+          );
+        }
+
+        results.push(newBooking);
+      }
+
+      return results;
+    });
+
+    return createdBookings;
+  }
+
+  /**
    * 💰 Calculate price based on pricing rules
    */
   private async calculatePrice(

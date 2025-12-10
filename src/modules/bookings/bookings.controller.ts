@@ -36,6 +36,27 @@ export class BookingsController {
   }
 
   /**
+   * 📦 Create bulk bookings (multiple courts/slots in one transaction)
+   * NEW: Support for cross-court bulk booking
+   */
+  @Post('bulk')
+  async createBulkBookings(
+    @Body() body: { bookings: CreateBookingDto[] },
+    @CurrentUser() user: JwtUser,
+  ) {
+    const results = await this.bookingsService.createBulkBookings(
+      body.bookings,
+      user.id,
+      user.role,
+    );
+    return {
+      message: 'Bulk bookings created successfully',
+      total: results.length,
+      bookings: results,
+    };
+  }
+
+  /**
    * 📋 Get current user's bookings (Customer)
    */
   @Get('my-bookings')
