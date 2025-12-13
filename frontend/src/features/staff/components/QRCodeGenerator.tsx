@@ -32,7 +32,14 @@ export const QRCodeGenerator: React.FC = () => {
   const fetchBookings = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // Fix: authStore lưu vào 'access_token' không phải 'token'
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        alert('❌ Bạn chưa đăng nhập. Vui lòng đăng nhập với tài khoản Staff/Admin!');
+        return;
+      }
+
       const response = await API.get('/bookings', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -42,9 +49,20 @@ export const QRCodeGenerator: React.FC = () => {
         (b: Booking) => b.status === 'CONFIRMED',
       );
       setBookings(confirmedBookings);
+      
+      if (confirmedBookings.length === 0) {
+        alert('⚠️ Không tìm thấy booking nào có trạng thái CONFIRMED. Vui lòng tạo booking trước!');
+      }
     } catch (error: any) {
       console.error('Failed to fetch bookings:', error);
-      alert('Không thể tải danh sách booking: ' + error.message);
+      
+      if (error.response?.status === 401) {
+        alert('❌ Unauthorized! Bạn cần đăng nhập với tài khoản Staff hoặc Admin.\n\nVui lòng:\n1. Đăng nhập tại /auth/login\n2. Sử dụng email: staff@badminton.com\n3. Password: Staff@123');
+      } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        alert('❌ Backend không chạy! Vui lòng khởi động backend tại http://localhost:3000');
+      } else {
+        alert('❌ Không thể tải danh sách booking: ' + (error.response?.data?.message || error.message));
+      }
     } finally {
       setIsLoading(false);
     }

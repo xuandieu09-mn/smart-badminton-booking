@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { QRScanner } from '../components/QRScanner';
 import { CourtMonitor } from '../components/CourtMonitor';
+import { QRCodeGenerator } from '../components/QRCodeGenerator';
 
 const API = axios.create({
   baseURL: 'http://localhost:3000/api',
@@ -9,7 +10,7 @@ const API = axios.create({
 });
 
 export const CheckInPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'scanner' | 'monitor'>('scanner');
+  const [activeTab, setActiveTab] = useState<'scanner' | 'monitor' | 'generator'>('generator');
   const [manualCode, setManualCode] = useState('');
   const [checkInResult, setCheckInResult] = useState<{
     success: boolean;
@@ -31,7 +32,18 @@ export const CheckInPage: React.FC = () => {
     setCheckInResult(null);
 
     try {
-      const token = localStorage.getItem('token');
+      // Fix: authStore lưu vào 'access_token' không phải 'token'
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setCheckInResult({
+          success: false,
+          message: '❌ Bạn chưa đăng nhập. Vui lòng đăng nhập lại!',
+        });
+        setIsProcessing(false);
+        return;
+      }
+      
       const response = await API.post(
         '/bookings/check-in',
         { bookingCode: bookingCode.trim() },
@@ -98,6 +110,16 @@ export const CheckInPage: React.FC = () => {
       <div className="bg-white rounded-lg shadow">
         <div className="flex border-b">
           <button
+            onClick={() => setActiveTab('generator')}
+            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'generator'
+                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            🎫 Tạo QR Code
+          </button>
+          <button
             onClick={() => setActiveTab('scanner')}
             className={`flex-1 px-6 py-4 font-medium transition-colors ${
               activeTab === 'scanner'
@@ -105,7 +127,7 @@ export const CheckInPage: React.FC = () => {
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            📱 QR Scanner
+            📱 Quét QR
           </button>
           <button
             onClick={() => setActiveTab('monitor')}
@@ -121,7 +143,10 @@ export const CheckInPage: React.FC = () => {
 
         {/* Tab Content */}
         <div className="p-6">
-          {activeTab === 'scanner' ? (
+          {activeTab === 'generator' ? (
+            /* QR Generator Tab */
+            <QRCodeGenerator />
+          ) : activeTab === 'scanner' ? (
             <div className="space-y-6">
               {/* Check-in Result */}
               {checkInResult && (

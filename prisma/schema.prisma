@@ -137,6 +137,12 @@ model Booking {
   // Expiry (for PENDING_PAYMENT status)
   expiresAt DateTime?
 
+  // Recurring Booking Support (Day 15)
+  isRecurring        Boolean  @default(false)
+  recurrenceGroupId  String?  // Link all bookings in same recurring series
+  recurrencePattern  String?  // "WEEKLY" | "BIWEEKLY" | "MONTHLY"
+  recurrenceDayOfWeek Int?    // 0=Sunday, 1=Monday, ..., 6=Saturday
+
   // Relations
   payment            Payment?
   cancellation       BookingCancellation?
@@ -144,6 +150,8 @@ model Booking {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([recurrenceGroupId])
 
   // IMPORTANT: Exclusion Constraint is added in migration SQL
 }
