@@ -31,15 +31,70 @@ export const Calendar: React.FC = () => {
   // Polling real-time bookings mỗi 5 giây
   usePollBookings(dateStr, 5000);
 
-  // NEW: Bulk booking mutation - handles multiple slots
+  // NEW: Merge consecutive slots into single bookings
+  const mergeConsecutiveSlots = (slots: SelectedSlot[]): Array<{
+    courtId: number;
+    startTime: string;
+    endTime: string;
+  }> => {
+    // Group slots by court
+    const courtGroups = slots.reduce((acc, slot) => {
+      if (!acc[slot.courtId]) acc[slot.courtId] = [];
+      acc[slot.courtId].push(slot);
+      return acc;
+    }, {} as Record<number, SelectedSlot[]>);
+
+    const mergedBookings: Array<{
+      courtId: number;
+      startTime: string;
+      endTime: string;
+    }> = [];
+
+    // For each court, merge consecutive slots
+    Object.values(courtGroups).forEach((courtSlots) => {
+      // Sort slots by start time
+      const sorted = [...courtSlots].sort(
+        (a, b) => a.startTime.getTime() - b.startTime.getTime()
+      );
+
+      let currentGroup: SelectedSlot[] = [sorted[0]];
+
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = currentGroup[currentGroup.length - 1];
+        const curr = sorted[i];
+
+        // Check if consecutive (endTime of prev = startTime of curr)
+        if (prev.endTime.getTime() === curr.startTime.getTime()) {
+          currentGroup.push(curr);
+        } else {
+          // Not consecutive, save current group and start new one
+          mergedBookings.push({
+            courtId: currentGroup[0].courtId,
+            startTime: currentGroup[0].startTime.toISOString(),
+            endTime: currentGroup[currentGroup.length - 1].endTime.toISOString(),
+          });
+          currentGroup = [curr];
+        }
+      }
+
+      // Save last group
+      mergedBookings.push({
+        courtId: currentGroup[0].courtId,
+        startTime: currentGroup[0].startTime.toISOString(),
+        endTime: currentGroup[currentGroup.length - 1].endTime.toISOString(),
+      });
+    });
+
+    return mergedBookings;
+  };
+
+  // NEW: Bulk booking mutation - handles multiple slots with merging
   const { mutate: createBulkBooking, isPending: isBooking } = useMutation({
     mutationFn: async (slots: SelectedSlot[]) => {
-      // Group slots by court for batch API call
-      const bookingRequests = slots.map(slot => ({
-        courtId: slot.courtId,
-        startTime: slot.startTime.toISOString(),
-        endTime: slot.endTime.toISOString(),
-      }));
+      // Merge consecutive slots into continuous bookings
+      const bookingRequests = mergeConsecutiveSlots(slots);
+
+      console.log('📦 Merged bookings:', bookingRequests);
 
       // Call bulk booking API
       return apiClient.post('/bookings/bulk', {
@@ -48,10 +103,21 @@ export const Calendar: React.FC = () => {
     },
     onSuccess: (response) => {
       const bookingCodes = response.data.bookings?.map((b: any) => b.bookingCode).join(', ') || '';
-      alert(`✅ Đặt sân thành công!\nMã đặt: ${bookingCodes}`);
+      const count = response.data.bookings?.length || 0;
+      const message = `✅ Đặt sân thành công!\n${count} booking được tạo\nMã đặt: ${bookingCodes}\n\n⏱️ Vui lòng thanh toán trong vòng 15 phút để giữ slot!`;
+      alert(message);
+      
+      // Redirect to My Bookings after 2 seconds
+      setTimeout(() => {
+        if (confirm('Chuyển đến trang "Lịch của tôi" để thanh toán?')) {
+          window.location.href = '/my-bookings';
+        }
+      }, 500);
+      
       setSelectedSlots([]);
     },
     onError: (error: any) => {
+      console.error('❌ Booking error:', error);
       alert('❌ Lỗi: ' + (error.response?.data?.message || error.message));
     },
   });

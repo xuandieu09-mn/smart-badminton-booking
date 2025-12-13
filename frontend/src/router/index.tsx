@@ -7,6 +7,7 @@ import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { CalendarPage } from '../features/calendar/pages/CalendarPage';
 import { BookingPage } from '../features/booking/pages/BookingPage';
+import MyBookingsPage from '../features/booking/pages/MyBookingsPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
 import AdminLayout from '../features/admin/components/AdminLayout';
 import AdminDashboard from '../features/admin/pages/AdminDashboard';
@@ -19,6 +20,7 @@ import StaffLayout from '../features/staff/layouts/StaffLayout';
 import StaffDashboard from '../features/staff/pages/StaffDashboard';
 import CheckInPage from '../features/staff/pages/CheckInPage';
 import { NotFound } from '../features/common/components/NotFound';
+import PaymentResultPage from '../features/payment/pages/PaymentResultPage';
 
 const HomePage: React.FC = () => (
   <div className="bg-white shadow rounded-lg p-6">
@@ -133,8 +135,21 @@ export const router = createBrowserRouter([
         element: <BookingPage />,
       },
       {
+        path: 'my-bookings',
+        element: <MyBookingsPage />,
+      },
+      {
         path: 'dashboard',
         element: <CustomerDashboard />,
+      },
+    ],
+  },
+  {
+    path: '/payment',
+    children: [
+      {
+        path: 'result',
+        element: <PaymentResultPage />,
       },
     ],
   },

@@ -4,13 +4,16 @@
 
 ## 📊 TIẾN ĐỘ DỰ ÁN
 
-**Hoàn thành tổng thể: 48% (12/25 ngày)**
+**Hoàn thành tổng thể: 52% (14/27 ngày)**
 
 ### CHÚ THÍCH TRẠNG THÁI
 - ✅ **Hoàn thành** - Đã triển khai đầy đủ với tests
 - ⚠️ **Một phần** - Đã bắt đầu nhưng cần hoàn thiện
 - ❌ **Chưa làm** - Chưa bắt đầu
-- 🔥 **Ưu tiên cao** - Đang chặn các tính năng khác
+- 🔥 **BLOCKING** - Đang chặn nhiều tính năng khác (ưu tiên tuyệt đối)
+
+### 🎯 CHIẾN LƯỢC MỚI: DEPENDENCY-DRIVEN DEVELOPMENT
+**Nguyên tắc:** Hoàn thiện CORE FLOW (Booking + Payment) trước, sau đó mới build các feature phụ thuộc vào nó.
 
 ---
 
@@ -287,9 +290,9 @@ Tính năng:
 ✅ Phân tích trạng thái thanh toán (progress bars)
 ✅ Danh sách thanh toán gần đây
 ✅ Chỉ báo trạng thái có màu
-📅 GIAI ĐOẠN 5: TÍNH NĂNG ENTERPRISE (Ngày 13-21) 🔥
-Day 13: Đặt chỗ Real-time với Khóa tạm thời (WF1.1) ❌ QUAN TRỌNG
-Trạng thái: 0% - CẦN TRIỂN KHAI
+📅 GIAI ĐOẠN 5: CORE BOOKING FLOW (Ngày 13-17) 🔥 BLOCKING
+Day 13: Đặt chỗ Real-time với Khóa tạm thời (WF1.1) ✅ HOÀN THÀNH
+Trạng thái: 100% - ĐÃ TRIỂN KHAI (Calendar với slot selection)
 
 Yêu cầu:
 Code
@@ -328,8 +331,8 @@ CREATE TABLE temporary_locks (
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
-Day 14: Hệ thống Check-in bằng QR Code (WF2.1) ❌ QUAN TRỌNG
-Trạng thái: 0% - CẦN TRIỂN KHAI
+Day 14: Hệ thống Check-in bằng QR Code (WF2.1) ✅ HOÀN THÀNH
+Trạng thái: 100% - ĐÃ TRIỂN KHAI
 
 Yêu cầu:
 Code
@@ -337,57 +340,124 @@ Code
 - Tạo mã QR sau khi xác nhận booking
 - Nhân viên quét QR qua mobile/tablet
 - Giám sát sân real-time (đèn xanh/đỏ)
-Nhiệm vụ cần làm:
-❌ Tạo QR code sau khi thanh toán (dùng package qrcode)
-❌ Lưu QR data trong booking record
-❌ Tạo Staff Check-in UI (camera scanner)
-❌ Triển khai endpoint check-in (cập nhật status thành CHECKED_IN)
-❌ Bảng trạng thái sân real-time (WebSockets hoặc polling)
-Files cần tạo:
+
+Nhiệm vụ đã hoàn thành:
+✅ Tạo QR code tự động sau khi thanh toán (dùng package qrcode)
+✅ Lưu QR data trong booking record (field qrCode)
+✅ Endpoint generate QR code cho booking
+✅ Endpoint check-in với booking code
+✅ Frontend: MyBookingsPage với nút "Xem QR Code"
+✅ Modal hiển thị QR code + download
+
+Files đã tạo:
 Code
-❌ src/modules/bookings/services/qr-code.service.ts
-❌ frontend/src/features/staff/pages/CheckInPage.tsx
-❌ frontend/src/features/staff/components/QRScanner.tsx
-❌ frontend/src/features/staff/components/CourtMonitor.tsx
-API Endpoints cần thêm:
+✅ src/modules/bookings/qrcode.service.ts
+✅ src/modules/payments/payments.service.ts (auto QR generation)
+✅ frontend/src/features/booking/pages/MyBookingsPage.tsx (QR modal)
+
+API Endpoints đã có:
 Code
-❌ POST /api/bookings/:id/generate-qr - Tạo QR sau thanh toán
-❌ POST /api/bookings/check-in - Quét QR và check-in
-❌ GET /api/courts/realtime-status - Lấy trạng thái sân real-time
-Dependencies cần cài:
-bash
-npm install qrcode @types/qrcode
-npm install react-qr-reader
-Day 15: Đặt lịch Cố định (WF1.2) ❌ CAO
-Trạng thái: 0% - CẦN TRIỂN KHAI
+✅ POST /api/bookings/:id/generate-qr - Tạo QR cho booking
+✅ POST /api/bookings/check-in - Quét QR và check-in
+✅ Auto-generate QR sau payment thành công
+
+Cần bổ sung (Staff UI):
+⏳ frontend/src/features/staff/pages/CheckInPage.tsx
+⏳ frontend/src/features/staff/components/QRScanner.tsx
+⏳ frontend/src/features/staff/components/CourtMonitor.tsx
+⏳ GET /api/courts/realtime-status - Trạng thái sân real-time
+Day 15: 🔥 Payment Flow với Wallet & QR Code ⚠️ 80% HOÀN THÀNH
+Trạng thái: 80% - **WALLET PAYMENT + QR CODE ĐÃ XONG, CẦN GATEWAY**
+
+**LÝ DO ƯU TIÊN CAO:** 
+- Staff dashboard cần payment để hiển thị doanh thu
+- Customer dashboard cần payment history
+- POS mini cần payment integration
+- Admin analytics cần payment data
+- **→ Payment là dependency của 80% tính năng còn lại**
 
 Yêu cầu:
 Code
-🔥 WF1.2: Recurring Booking (thay thế tìm đối thủ)
-- Khách chọn: Sân X, Thứ 5 hàng tuần, 19:00-20:00, trong 3 tháng
-- System scan conflicts (kiểm tra giải đấu)
-- Tạo bulk bookings nếu tất cả slots trống
-Nhiệm vụ cần làm:
-❌ Tạo RecurringBookingDto (court, dayOfWeek, time, duration)
-❌ Triển khai conflict scan (kiểm tra tournaments trong bookings với type='TOURNAMENT')
-❌ Tạo recurring bookings (tạo 12 records nếu 3 tháng)
-❌ Thêm recurrence_group_id để link các bookings liên quan
-❌ Frontend UI cho thiết lập recurring booking
+🔥 Tích hợp Payment Gateway
+- VNPay: Redirect tới URL thanh toán, xử lý IPN callback
+- MoMo: Thanh toán QR code, xác thực webhook
+- Cập nhật trạng thái booking khi thanh toán thành công
+- Hỗ trợ thanh toán từ Wallet (nếu đủ tiền)
+- Auto-refund khi hủy booking
+
+Nhiệm vụ đã hoàn thành:
+✅ Wallet payment integration
+✅ Auto QR code generation sau thanh toán
+✅ MyBookingsPage với payment UI
+✅ Cancel booking với auto-refund
+✅ POST /api/payments/pay/:bookingId
+✅ POST /api/bookings/:id/cancel
+✅ Countdown timer cho PENDING_PAYMENT
+✅ Real-time booking status updates
+
+Nhiệm vụ còn lại:
+❌ Đăng ký tài khoản VNPay sandbox
+❌ Tạo VNPayService (tạo payment URL, xác thực signature)
+❌ Tạo MoMoService (tạo QR code, xác thực webhook)
+❌ Xử lý IPN callbacks (cập nhận booking status)
+❌ Frontend: Redirect tới payment gateway sau khi booking
+❌ Thêm chức năng chọn phương thức thanh toán (Wallet vs Gateway)
 Files cần tạo:
 Code
-❌ src/modules/bookings/dto/create-recurring-booking.dto.ts
-❌ src/modules/bookings/services/recurring-booking.service.ts
-❌ frontend/src/features/booking/pages/RecurringBookingPage.tsx
+❌ src/modules/payments/gateways/vnpay.service.ts
+❌ src/modules/payments/gateways/momo.service.ts
+❌ src/modules/payments/dto/vnpay-callback.dto.ts
+❌ src/mo📧 Email Notifications với Nodemailer (DỜI TỪ DAY 22) ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI
+
+**LÝ DO ƯU TIÊN:** Cần email confirmation ngay sau khi thanh toán thành công
+
+Nhiệm vụ cần làm:
+❌ Thiết lập Nodemailer với Gmail SMTP
+❌ Tạo email templates (xác nhận booking, hủy, payment success)
+❌ Queue email jobs với BullMQ (tránh block response)
+❌ Gửi email khi có sự kiện booking/payment
+❌ Thêm QR code vào email confirmation
+Files cần tạo:
+Code
+❌ src/modules/notifications/notifications.service.ts
+❌ src/modules/notifications/templates/booking-confirmation.hbs
+❌ src/modules/notifications/templates/payment-success.hbs
+❌ src/modules/notifications/processors/email.processor.ts
 API Endpoints cần thêm:
 Code
-❌ POST /api/bookings/recurring - Tạo lịch lặp lại
-❌ POST /api/bookings/recurring/:groupId/cancel-all - Hủy cả series
-❌ GET /api/bookings/recurring/:groupId - Lấy tất cả bookings trong series
-Database Schema Update:
-SQL
-ALTER TABLE bookings ADD COLUMN recurrence_group_id VARCHAR(50);
-ALTER TABLE bookings ADD COLUMN is_recurring BOOLEAN DEFAULT FALSE;
-CREATE INDEX idx_recurrence_group ON bookings(recurrence_group_id);
+❌ POST /api/notifications/test-email (admin) - Test email configuration
+Queue Jobs:
+Code
+❌ SEND_EMAIL queue
+❌ BOOKING_CONFIRMATION job
+❌ PAYMENT_SUCCESS job
+❌ BOOKING_CANCELLED job
+
+---
+
+Day 17: 👤 Customer "My Bookings" Page - Hoàn thiện UI ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI (PHỤ THUỘC DAY 15-16)/pages/PaymentMethodPage.tsx
+❌ frontend/src/features/payment/pages/PaymentReturnPage.tsx
+API Endpoints cần thêm:
+Code
+❌ POST /api/payments/vnpay/create-url - Tạo VNPay payment URL
+❌ GET /api/payments/vnpay/callback - Xử lý VNPay IPN
+❌ POST /api/payments/momo/create-qr - Tạo MoMo QR code
+❌ POST /api/payments/momo/webhook - Xử lý MoMo webhook
+❌ POST /api/payments/wallet-or-gateway - Chọn phương thức thanh toán
+Biến môi trường:
+env
+VNPAY_TMN_CODE=your_tmn_code
+VNPAY_SECRET_KEY=your_secret_key
+VNPAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNPAY_RETURN_URL=http://localhost:5173/payment/return
+
+MOMO_PARTNER_CODE=your_partner_code
+MOMO_ACCESS_KEY=your_access_key
+MOMO_SECRET_KEY=your_secret_key
+MOMO_ENDPOINT=https://test-payment.momo.vn
+Security: Xác thực HMAC SHA512 signature ✅
 Day 16: Membership Tiers & Loyalty Points (WF1.3) ❌ CAO
 Trạng thái: 0% - CẦN TRIỂN KHAI
 
@@ -408,8 +478,34 @@ Code
 ❌ prisma/migrations/add_membership_tables.sql
 ❌ src/modules/membership/membership.service.ts
 ❌ src/modules/membership/membership.controller.ts
-❌ frontend/src/features/profile/components/MembershipCard.tsx
-API Endpoints cần thêm:
+**LÝ DO ƯU TIÊN:** Customer cần xem payment history, download invoice, track booking status
+
+Nhiệm vụ cần làm:
+❌ Tạo MyBookingsPage với tabs (Upcoming, Completed, Cancelled)
+❌ Hiển thị payment status cho mỗi booking
+❌ Nút "Pay Now" cho bookings PENDING_PAYMENT
+❌ Nút "Download Invoice" cho bookings CONFIRMED
+❌ Hiển thị QR code để check-in
+❌ Countdown timer cho bookings sắp hết hạn
+❌ Filter bookings theo date range
+Files cần tạo:
+Code
+❌ frontend/src/features/customer/pages/MyBookingsPage.tsx
+❌ frontend/src/features/customer/components/BookingCard.tsx
+❌ frontend/src/features/customer/components/PaymentStatusBadge.tsx
+❌ frontend/src/features/customer/components/InvoiceDownload.tsx
+API Endpoints sử dụng:
+Code
+✅ GET /api/bookings/my-bookings (đã có)
+✅ POST /api/payments/wallet-or-gateway (Day 15)
+❌ GET /api/bookings/:id/invoice - Generate PDF invoice
+
+---
+
+📅 GIAI ĐOẠN 6: STAFF & ADMIN FEATURES (Ngày 18-21) 🎯
+
+Day 18: 👨‍💼 Staff Dashboard với Payment Tracking ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI (PHỤ THUỘC DAY 15)
 Code
 ❌ GET /api/membership/my-tier - Lấy tier hiện tại
 ❌ GET /api/membership/points-history - Lịch sử giao dịch points
@@ -421,8 +517,30 @@ CREATE TABLE memberships (
   user_id INT UNIQUE REFERENCES users(id),
   tier VARCHAR(20) DEFAULT 'BRONZE',
   total_bookings INT DEFAULT 0,
-  total_spent DECIMAL(12,2) DEFAULT 0,
-  points_balance INT DEFAULT 0,
+**LÝ DO ƯU TIÊN:** Staff cần xem bookings hôm nay, payment status, check-in status
+
+Nhiệm vụ cần làm:
+❌ Tạo StaffDashboard với today's bookings
+❌ Hiển thị payment status (Paid, Pending, Expired)
+❌ Court status monitoring (Available, Occupied, Maintenance)
+❌ Quick actions: Check-in, Refund, Cancel
+❌ Shift summary (total revenue, total bookings)
+Files cần tạo:
+Code
+❌ frontend/src/features/staff/pages/StaffDashboard.tsx
+❌ frontend/src/features/staff/components/TodayBookings.tsx
+❌ frontend/src/features/staff/components/CourtStatusGrid.tsx
+❌ frontend/src/features/staff/components/ShiftSummary.tsx
+API Endpoints cần thêm:
+Code
+❌ GET /api/bookings/today - Lấy bookings hôm nay
+❌ GET /api/courts/realtime-status - Trạng thái sân real-time
+❌ GET /api/stats/shift-summary - Tóm tắt ca làm việc
+
+---
+
+Day 19: 🛒 Mini POS & Quản lý Ca (WF2.3) ❌ TRUNG BÌNH
+Trạng thái: 0% - CẦN TRIỂN KHAI (PHỤ THUỘC DAY 15 + 18)
   discount_rate DECIMAL(5,2) DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
@@ -480,7 +598,61 @@ Day 18: Mini POS & Quản lý Ca (WF2.3) ❌ TRUNG BÌNH
 Trạng thái: 0% - CẦN TRIỂN KHAI
 
 Yêu cầu:
+Code20: 📊 Admin Analytics Dashboard (WF3.2) ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI (PHỤ THUỘC DAY 15)
+
+**LÝ DO ƯU TIÊN:** Admin cần xem revenue analytics, booking trends, payment statistics
+
+Nhiệm vụ cần làm:
+❌ Tạo analytics queries trong BookingsService
+❌ Tạo dữ liệu heatmap (aggregate bookings theo giờ)
+❌ Tạo biểu đồ so sánh doanh thu (Recharts)
+❌ Payment success rate chart
+❌ Top 5 sân bận nhất
+❌ Cache dữ liệu analytics trong Redis (TTL 5 phút)
+Files cần tạo:
 Code
+❌ src/modules/analytics/analytics.service.ts
+❌ src/modules/analytics/analytics.controller.ts
+❌ frontend/src/features/admin/pages/AnalyticsPage.tsx
+❌ frontend/src/features/admin/components/HeatmapChart.tsx
+❌ frontend/src/features/admin/components/RevenueChart.tsx
+❌ frontend/src/features/admin/components/PaymentSuccessRate.tsx
+API Endpoints cần thêm:
+Code
+❌ GET /api/analytics/heatmap?date=YYYY-MM-DD
+❌ GET /api/analytics/revenue?startDate=...&endDate=...
+❌ GET /api/analytics/payment-stats
+❌ GET /api/analytics/top-courts
+Queries cần triển khai:
+SQL
+-- Heatmap: Đếm bookings theo giờ
+SELECT 
+  EXTRACT(HOUR FROM start_time) as hour,
+  COUNT(*) as booking_count
+FROM bookings
+WHERE DATE(start_time) = '2025-12-13'
+GROUP BY hour
+ORDER BY hour;
+
+-- Doanh thu theo tháng
+SELECT 
+  TO_CHAR(created_at, 'YYYY-MM') as month,
+  SUM(total_price) as revenue
+FROM bookings
+WHERE status = 'CONFIRMED'
+GROUP BY month
+ORDER BY month DESC;
+
+-- Payment success rate
+SELECT 
+  COUNT(CASE WHEN status = 'CONFIRMED' THEN 1 END) * 100.0 / COUNT(*) as success_rate
+FROM bookings
+WHERE status IN ('CONFIRMED', 'EXPIRED', 'CANCELLED');
+
+---
+
+Day 21: 🛠 Vận hành Sân - Chặn & Hoán đổi (WF2.2) ❌ TRUNG BÌNH
 🔥 WF2.3: Hệ thống Point of Sale (POS)
 - Thêm dịch vụ phụ vào booking (nước, thuê vợt)
 - Theo dõi thanh toán tiền mặt/thẻ mỗi ca
@@ -498,56 +670,11 @@ Code
 ❌ src/modules/pos/pos.controller.ts
 ❌ frontend/src/features/staff/pages/POSPage.tsx
 ❌ frontend/src/features/staff/components/ShiftReport.tsx
-API Endpoints cần thêm:
-Code
-❌ POST /api/pos/add-item - Thêm item vào booking
-❌ GET /api/pos/booking/:id/items - Lấy booking extras
-❌ POST /api/pos/end-shift - Tạo báo cáo ca
-❌ GET /api/pos/shift-history - Lấy lịch sử các ca trước
-Database Schema:
-SQL
-CREATE TABLE booking_extras (
-  id SERIAL PRIMARY KEY,
-  booking_id INT REFERENCES bookings(id),
-  item_type VARCHAR(50),
-  item_name VARCHAR(100),
-  quantity INT DEFAULT 1,
-  unit_price DECIMAL(10,2),
-  total_price DECIMAL(10,2),
-  created_at TIMESTAMP DEFAULT NOW()
-);
+---
 
-CREATE TABLE shift_reports (
-  id SERIAL PRIMARY KEY,
-  staff_id INT REFERENCES users(id),
-  shift_start TIMESTAMP NOT NULL,
-  shift_end TIMESTAMP,
-  total_cash DECIMAL(12,2) DEFAULT 0,
-  total_card DECIMAL(12,2) DEFAULT 0,
-  total_refunds DECIMAL(12,2) DEFAULT 0,
-  notes TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-Day 19: Đa chi nhánh & Cấu hình Định giá Động (WF3.1) ❌ CAO
-Trạng thái: 0% - CẦN TRIỂN KHAI
+📅 GIAI ĐOẠN 7: ADVANCED FEATURES (Ngày 22-24) 🚀
 
-Yêu cầu:
-Code
-🔥 WF3.1: Quản lý Đa chi nhánh
-- CRUD cho partners/branches (1 partner = N branches)
-- Mỗi branch có sân & pricing rules riêng
-- Admin có thể cấu hình: "Giờ vàng (17h-20h) +20%"
-Nhiệm vụ cần làm:
-❌ Thêm bảng branches (partnerId, name, address, phone)
-❌ Cập nhật bảng courts để link tới branch_id
-❌ Cập nhật pricing_rules để link tới branch_id (không chỉ courtId)
-❌ Admin UI cho quản lý branch
-❌ Admin UI cho cấu hình pricing rule (CRUD)
-Files cần tạo:
-Code
-❌ prisma/migrations/add_branches_table.sql
-❌ src/modules/branches/branches.service.ts
-❌ src/modules/branches/branches.controller.ts
+Day 22: 🏆 Membership Tiers & Loyalty Points (WF1.3) ❌ TRUNG BÌNH
 ❌ frontend/src/features/admin/pages/BranchManagement.tsx
 ❌ frontend/src/features/admin/pages/PricingRuleConfig.tsx
 API Endpoints cần thêm:
@@ -614,62 +741,59 @@ FROM bookings
 WHERE DATE(start_time) = '2025-12-05'
 GROUP BY hour
 ORDER BY hour;
+Trạng thái: 0% - CẦN TRIỂN KHAI (Có thể làm sau khi production stable)
 
--- Doanh thu theo tháng
-SELECT 
-  TO_CHAR(created_at, 'YYYY-MM') as month,
-  SUM(total_price) as revenue
-FROM bookings
-WHERE status = 'CONFIRMED'
-GROUP BY month
-ORDER BY month DESC;
-Day 21: Tích hợp VNPay/MoMo Payment Gateway 🔥 QUAN TRỌNG
-Trạng thái: 0% - CHẶN PRODUCTION
+**LÝ DO ƯU TIÊN THẤP:** Membership là nice-to-have, không blocking core flow
 
 Yêu cầu:
 Code
-🔥 Tích hợp Payment Gateway
-- VNPay: Redirect tới URL thanh toán, xử lý IPN callback
-- MoMo: Thanh toán QR code, xác thực webhook
-- Cập nhật trạng thái booking khi thanh toán thành công
-Nhiệm vụ cần làm:
-❌ Đăng ký tài khoản VNPay sandbox
-❌ Tạo VNPayService (tạo payment URL, xác thực signature)
-❌ Tạo MoMoService (tạo QR code, xác thực webhook)
-❌ Xử lý IPN callbacks (cập nhật booking status)
-❌ Frontend: Redirect tới payment gateway sau khi booking
-Files cần tạo:
+🏆 WF1.3: Hệ thống Thành viên
+- Silver: Giảm 5% sau 10 bookings
+- Gold: Giảm 10% sau 50 bookings
+- Platinum: Giảm 15% + ưu tiên đặt sân
+(Giữ nguyên nội dung Day 16 cũ từ dòng "Nhiệm vụ cần làm" đến hết)
+
+---
+
+Day 23: 🔄 Đặt lịch Cố định - Recurring Booking (WF1.2) (DỜI TỪ DAY 15) ❌ TRUNG BÌNH
+Trạng thái: ⚠️ 50% - Backend hoàn thành, Frontend cần đơn giản hóa
+
+**LÝ DO DỜI:** Tính năng phức tạp, không blocking core features, nên làm sau khi core flow vững
+
+Yêu cầu:
 Code
-❌ src/modules/payments/gateways/vnpay.service.ts
-❌ src/modules/payments/gateways/momo.service.ts
-❌ src/modules/payments/dto/vnpay-callback.dto.ts
-❌ src/modules/payments/dto/momo-callback.dto.ts
-❌ frontend/src/features/payment/pages/PaymentGateway.tsx
-API Endpoints cần thêm:
+🔄 WF1.2: Recurring Booking
+- Khách chọn: Sân X, Thứ 5 hàng tuần, 19:00-20:00, trong 3 tháng
+- System scan conflicts
+- Tạo bulk bookings nếu tất cả slots trống
+Backend đã có:
+✅ RecurringBookingService với conflict detection
+✅ POST /api/bookings/recurring
+✅ POST /api/bookings/recurring/check-availability
+✅ Availability heatmap logic
+Frontend cần làm:
+❌ Đơn giản hóa UI (bỏ FixedScheduleGrid phức tạp)
+❌ Tạo form wizard đơn giản: Chọn sân → Chọn giờ → Chọn pattern → Preview
+❌ Hiển thị tổng giá + số lượng bookings
+❌ Integration với payment gateway (Day 15)
+Files cần chỉnh sửa:
 Code
-❌ POST /api/payments/vnpay/create-url - Tạo VNPay payment URL
-❌ GET /api/payments/vnpay/callback - Xử lý VNPay IPN
-❌ POST /api/payments/momo/create-qr - Tạo MoMo QR code
-❌ POST /api/payments/momo/webhook - Xử lý MoMo webhook
-Biến môi trường:
-env
-VNPAY_TMN_CODE=your_tmn_code
-VNPAY_SECRET_KEY=your_secret_key
-VNPAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=http://localhost:5173/payment/return
+❌ frontend/src/features/booking/pages/RecurringBookingPage.tsx - Đơn giản hóa
+❌ frontend/src/features/booking/components/RecurringBookingWizard.tsx - Tạo mới
 
-MOMO_PARTNER_CODE=your_partner_code
-MOMO_ACCESS_KEY=your_access_key
-MOMO_SECRET_KEY=your_secret_key
-MOMO_ENDPOINT=https://test-payment.momo.vn
-Security: Xác thực HMAC SHA512 signature ✅
+---
 
-📅 GIAI ĐOẠN CUỐI: TESTING & DEPLOYMENT (Ngày 22-25) ❌
-Day 22: Email Notifications với Nodemailer ❌ CAO
-Trạng thái: 0% - CẦN TRIỂN KHAI
+Day 24: 🏢 Đa chi nhánh & Cấu hình Định giá Động (WF3.1) (DỜI TỪ DAY 19) ❌ THẤP
+Trạng thái: 0% - CẦN TRIỂN KHAI (Chỉ cần nếu scale multi-location)
 
-Nhiệm vụ cần làm:
-❌ Thiết lập Nodemailer với Gmail SMTP
+**LÝ DO ƯU TIÊN THẤP:** Chỉ cần khi business mở rộng nhiều chi nhánh
+
+(Giữ nguyên nội dung Day 19 cũ)
+
+---
+
+📅 GIAI ĐOẠN 8: TESTING & DEPLOYMENT (Ngày 25-27) ✅
+Day 25: Integration Tests (E2E) ❌ CAO
 ❌ Tạo email templates (xác nhận booking, hủy)
 ❌ Queue email jobs với BullMQ
 ❌ Gửi email khi có sự kiện booking
@@ -695,22 +819,159 @@ Code
 Day 24: Bảo mật Nâng cao ❌ TRUNG BÌNH
 Trạng thái: 0% - CẦN TRIỂN KHAI
 
-Nhiệm vụ cần làm:
-❌ Cài Helmet middleware
-❌ Thiết lập rate limiting (@nestjs/throttler)
-❌ Cấu hình CORS đúng cách
-❌ Thêm input sanitization
-❌ Security audit
-Files cần chỉnh sửa:
-Code
-❌ src/main.ts - Thêm Helmet, CORS, Throttler
-Day 25: Production Deployment ❌ CAO
+Nhiệm6: Bảo mật Nâng cao ❌ CAO
 Trạng thái: 0% - CẦN TRIỂN KHAI
+
+**CRITICAL SECURITY:**
+- Payment gateway webhook authentication
+- Rate limiting cho payment endpoints
+- SQL injection prevention (Prisma đã handle)
+- XSS protection
+- CSRF tokens cho payment forms
+7: Production Deployment ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI
+
+**DEPLOYMENT CHECKLIST:**
+- ✅ Payment gateway credentials configured
+- ✅ Email SMTP configured
+- ✅ Database migrations run
+- ✅ Redis instance running
+- ✅ Environment variables set
+- ✅ CORS configured for production domain
+- ✅ Rate limiting enabled
 
 Nhiệm vụ cần làm:
 ❌ Thiết lập CI/CD pipeline (GitHub Actions)
 ❌ Deploy backend lên Railway/Render
 ❌ Deploy frontend lên Vercel
+❌ Thiết lập production database (Supabase/Neon)
+❌ Thiết lập production Redis (Upstash)
+❌ Cấu hình biến môi trường production
+❌ Thiết lập monitoring (Sentry cho error tracking)
+## 🚀 NEXT STEPS - PRIORITY ORDER
+
+**🔥 NGAY BÂY GIỜ (Tuần này - BLOCKING):**
+1. **Day 15: Payment Gateway** - VNPay/MoMo integration (2-3 ngày)
+2. **Day 16: Email Notifications** - Booking confirmation emails (1 ngày)
+3. **Day 17: My Bookings Page** - Customer UI với payment status (1 ngày)
+
+**📊 SAU ĐÓ (Tuần tới - BUILD ON TOP):**
+4. Day 18: Staff Dashboard - View bookings + payments
+5. Day 19: Mini POS - Sell extras
+6. Day 20: Admin Analytics - Revenue charts
+
+**✨ CUỐI CÙNG (Optional polish):**
+7. Day 22: Membership System
+8. Day 23: Recurring Booking (đơn giản hóa UI)
+9. Day 25-27: Testing + Security +sting & Deployment (Ngày 25-27) | ❌ | 0% |
+
+**Hoàn thành tổng thể: 52% (14/27 ngày)**
+
+---
+
+## 🎯 CON ĐƯỜNG TỚI PRODUCTION (CẬP NHẬT)
+
+### ✅ Tuần 1 (Ngày 13-17) 🔥 **BLOCKING - PHẢI XONG**
+- ✅ Day 13: Temporary Lock System (WF1.1) - DONE
+- ✅ Day 14: QR Code Check-in (WF2.1) - DONE
+- ✅ Day 15 (Partial): Recurring Booking Backend - DONE (Frontend cần đơn giản hóa)
+- **❌ Day 15 (NEW): VNPay/MoMo Payment Gateway** - **BLOCKING**
+- **❌ Day 16: Email Notifications** - **BLOCKING**
+## 📁 FILES CHÍNH CẦN TẠO (PRIORITY ORDER)
+
+### 🔥 TUẦN NÀY - BLOCKING PRIORITY
+
+**Day 15: Payment Gateway Services**
+```
+❌ src/modules/payments/gateways/vnpay.service.ts
+❌ src/modules/payments/gateways/momo.service.ts
+❌ src/modules/payments/dto/payment-gateway.dto.ts
+❌ frontend/src/features/payment/pages/PaymentMethodPage.tsx
+❌ frontend/src/features/payment/pages/PaymentReturnPage.tsx
+```
+
+**Day 16: Email Service**
+```
+❌ src/modules/notifications/notifications.service.ts
+❌ src/modules/notifications/templates/*.hbs
+❌ src/modules/notifications/processors/email.processor.ts
+```
+
+**Day 17: Customer UI**
+```
+❌ frontend/src/features/customer/pages/MyBookingsPage.tsx
+❌ frontend/src/features/customer/components/BookingCard.tsx
+❌ frontend/src/features/customer/components/PaymentStatusBadge.tsx
+```
+
+### 📊 SAU ĐÓ - BUILD ON CORE
+
+**Day 18-20: Staff & Admin**
+```
+❌ frontend/src/features/staff/pages/StaffDashboard.tsx
+❌ src/modules/pos/pos.service.ts
+❌ src/modules/analytics/analytics.service.ts
+## 🎯 CHỈ SỐ THÀNH CÔNG (CẬP NHẬT)
+
+### ✅ ĐÃ ĐẠT ĐƯỢC (Day 1-14):
+- ✅ Booking system với conflict detection
+- ✅ QR code check-in cho staff
+- ✅ Wallet payment system
+- ✅ Calendar UI với bulk booking
+- ✅ Admin dashboard (basic)
+- ✅ Recurring booking backend (API ready)
+
+### 🔥 MỤC TIÊU TUẦN NÀY (Day 15-17) - BLOCKING:
+- [ ] **VNPay/MoMo payment gateways hoạt động**
+- [ ] **Email confirmation sau thanh toán**
+- [ ] **Customer có thể xem lịch sử booking + payment status**
+- [ ] **Customer có thể download invoice**
+
+### 📊 MỤC TIÊU TUẦN SAU (Day 18-21):
+- [ ] Staff dashboard với payment tracking
+- [ ] Mini POS system
+- [ ] Admin analytics với revenue charts
+- [ ] Court operations (block/swap)
+
+### 🚀 READY FOR PRODUCTION (Day 25-27):
+- [ ] E2E tests pass (focus booking + payment flow)
+- [ ] Security audit pass (payment webhooks validated)
+- [ ] Production deployment successful
+- [ ] VNPay/MoMo webhooks working on production URL
+- [ ] Email notifications working
+- [ ] Zero critical bugs
+
+---
+
+## 📌 TÓM TẮT THAY ĐỔI ROADMAP
+
+### ❌ CŨ (Không hiệu quả):
+- Day 13-16: Làm nhiều tính năng rời rạc (lock, QR, recurring, membership)
+- Day 21: Payment gateway để cuối cùng → **Chặn tất cả tính năng khác**
+
+### ✅ MỚI (Dependency-driven):
+- **Day 15: Payment Gateway TRƯỚC** → Mở khóa Staff/Admin/Customer features
+- Day 16: Email Notifications → Cần ngay sau payment
+- Day 17: Customer UI → Phụ thuộc payment
+- Day 18-21: Staff/Admin features → Xây dựng trên nền payment
+- Day 22-24: Advanced features (recurring UI, membership) → Làm cuối
+
+### 💡 LỢI ÍCH:
+1. **Clear dependencies**: Payment first → Everything else flows
+2. **Testable incrementally**: Mỗi tuần có deliverable hoàn chỉnh
+3. **Less rework**: Không phải refactor payment sau
+4. **Recurring booking**: Để cuối khi đã quen codebase hơn
+
+---
+
+**Cập nhật lần cuối:** 13/12/2025 - Tái cấu trúc theo dependency analysis
+
+**Repository:** xuandieu09-mn/smart-badminton-booking
+
+**Session tiếp theo:** 🔥 Day 15 - VNPay/MoMo Payment Gateway Integration (BLOCKING PRIORITY)
+**CRITICAL PATH:** Day 15 → Day 16 → Day 17 → Production có thể chạy được với core features
+
+**Hoàn thành tổng thể: 52% (14 của 27 ngày)**
 ❌ Thiết lập production database (Supabase)
 ❌ Cấu hình biến môi trường
 ❌ Thiết lập monitoring (Sentry)
@@ -726,21 +987,33 @@ Hoàn thành tổng thể: 48% (12 của 25 ngày)
 
 🔥 CON ĐƯỜNG TỚI PRODUCTION
 Tuần 1 (Ngày 13-17) 🚨 ƯU TIÊN 1
-✅ Day 13: Temporary Lock System (WF1.1)
-✅ Day 14: QR Code Check-in (WF2.1)
-✅ Day 15: Recurring Booking (WF1.2)
-✅ Day 16: Membership Tiers (WF1.3)
-✅ Day 17: Court Operations (WF2.2)
-Tuần 2 (Ngày 18-21) 🚨 ƯU TIÊN 2
-Day 18: Mini POS System (WF2.3)
-Day 19: Multi-Branch Config (WF3.1)
-Day 20: Analytics & Heatmap (WF3.2)
-Day 21: VNPay/MoMo Integration 🔥 CHẶN
-Tuần 3 (Ngày 22-25) 📈 HOÀN THIỆN
-Day 22: Email Notifications
-Day 23: Integration Tests
-Day 24: Security Hardening
-Day 25: Production Deployment
+✅ Day5: Integration Tests (E2E) ❌ CAO
+Trạng thái: 0% - CẦN TRIỂN KHAI
+
+**PRIORITY TESTS:**
+1. Complete booking + payment flow (VNPay sandbox)
+2. QR check-in flow
+3. Wallet payment vs Gateway payment
+4. Auto-refund on cancellation
+5. Email notification triggers
+
+Nhiệm vụ cần làm:
+❌ Thiết lập Supertest
+❌ Viết E2E tests cho booking + payment flow (cao nhất)
+❌ Test ngăn chặn đặt trùng
+❌ Test VNPay callback handling
+❌ Test email notifications
+❌ Test role-based access
+Files cần tạo:
+Code
+❌ test/e2e/booking-payment-flow.e2e-spec.ts (PRIORITY)
+❌ test/e2e/vnpay-integration.e2e-spec.ts (PRIORITY)
+❌ test/e2e/qr-checkin.e2e-spec.ts
+❌ test/e2e/auth.e2e-spec.ts
+
+---
+
+Day 26: Bảo mật Nâng cao ❌ CAO
 📁 FILES CHÍNH CẦN SỬA ĐỔI
 Thay đổi Database Schema cần thiết:
 Code

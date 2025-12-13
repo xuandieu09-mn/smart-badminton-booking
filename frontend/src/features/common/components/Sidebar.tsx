@@ -8,8 +8,8 @@ export const Sidebar = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const links = [
-    { path: '/calendar', label: 'Calendar', icon: '📅' },
-    { path: '/bookings', label: 'My Bookings', icon: '📋' },
+    { path: '/calendar', label: 'Đặt sân', icon: '📅' },
+    { path: '/my-bookings', label: 'Lịch của tôi', icon: '📋' },
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
   ];
 

@@ -6,10 +6,16 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { Payment, PaymentStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import * as QRCode from 'qrcode';
+import { VNPayService } from './gateways/vnpay.service';
+import { VNPayCallbackDto } from './dto/payment-gateway.dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private vnpayService: VNPayService,
+  ) {}
 
   /**
    * Create payment for booking
@@ -62,6 +68,7 @@ export class PaymentsService {
     userId: number,
   ): Promise<{
     payment: Payment;
+    qrCode: string | null;
     success: boolean;
     message: string;
   }> {
@@ -132,7 +139,7 @@ export class PaymentsService {
       });
 
       // Update booking status
-      await tx.booking.update({
+      const confirmedBooking = await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: 'CONFIRMED',
@@ -153,13 +160,44 @@ export class PaymentsService {
         },
       });
 
-      return updatedPayment;
+      return { payment: updatedPayment, booking: confirmedBooking };
     });
 
+    // Generate QR code after successful payment
+    let qrCode: string | null = null;
+    try {
+      qrCode = await QRCode.toDataURL(
+        JSON.stringify({
+          bookingId: booking.id,
+          bookingCode: booking.bookingCode,
+          courtId: booking.courtId,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+        }),
+        {
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          width: 300,
+        },
+      );
+
+      // Save QR code to booking record
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          qrCode: qrCode,
+        },
+      });
+    } catch (error) {
+      console.error('QR code generation failed:', error);
+      // Don't fail payment if QR generation fails
+    }
+
     return {
-      payment: result,
+      payment: result.payment,
+      qrCode,
       success: true,
-      message: 'Payment successful. Booking confirmed.',
+      message: 'Payment successful. Booking confirmed. QR code generated.',
     };
   }
 
@@ -290,6 +328,180 @@ export class PaymentsService {
       payment: result.updatedPayment,
       wallet: result.updatedWallet,
       message: 'Payment refunded successfully',
+    };
+  }
+
+  /**
+   * 💳 Create VNPay payment URL
+   */
+  async createVNPayPaymentUrl(
+    bookingId: number,
+    userId: number,
+    returnUrl?: string,
+    ipAddr?: string,
+  ): Promise<{
+    success: boolean;
+    paymentUrl: string;
+    bookingId: number;
+    orderId: string;
+  }> {
+    // Get booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        user: true,
+        court: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+
+    if (booking.userId !== userId) {
+      throw new BadRequestException('You can only pay for your own bookings');
+    }
+
+    if (booking.paymentStatus === 'PAID') {
+      throw new BadRequestException('Booking is already paid');
+    }
+
+    if (booking.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot pay for cancelled booking');
+    }
+
+    // Create or get payment record
+    let payment = await this.prisma.payment.findFirst({
+      where: { bookingId },
+    });
+
+    if (!payment) {
+      payment = await this.prisma.payment.create({
+        data: {
+          bookingId,
+          amount: booking.totalPrice,
+          method: 'VNPAY',
+          status: PaymentStatus.UNPAID,
+        },
+      });
+    } else {
+      // Update payment method to VNPay
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { method: 'VNPAY' },
+      });
+    }
+
+    // Generate VNPay payment URL
+    const paymentUrl = this.vnpayService.createPaymentUrl({
+      amount: Number(booking.totalPrice),
+      orderInfo: `Thanh toan dat san ${booking.bookingCode}`,
+      orderId: bookingId.toString(),
+      returnUrl: returnUrl || this.vnpayService.returnUrl,
+      ipAddr: ipAddr || '127.0.0.1',
+    });
+
+    return {
+      success: true,
+      paymentUrl,
+      bookingId,
+      orderId: bookingId.toString(),
+    };
+  }
+
+  /**
+   * 🔔 Handle VNPay callback (IPN webhook)
+   */
+  async handleVNPayCallback(
+    bookingId: number,
+    callbackData: VNPayCallbackDto,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    booking?: any;
+  }> {
+    // Get booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+
+    // Get payment
+    const payment = await this.prisma.payment.findFirst({
+      where: { bookingId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment record not found');
+    }
+
+    // Already paid, skip
+    if (payment.status === PaymentStatus.PAID) {
+      return {
+        success: true,
+        message: 'Payment already processed',
+        booking,
+      };
+    }
+
+    // Execute payment confirmation transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Update payment
+      const updatedPayment = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.PAID,
+          paidAt: new Date(),
+          transactionId: callbackData.vnp_TransactionNo,
+        },
+      });
+
+      // Update booking
+      const updatedBooking = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CONFIRMED',
+          paymentStatus: 'PAID',
+        },
+      });
+
+      return { payment: updatedPayment, booking: updatedBooking };
+    });
+
+    // Generate QR code after successful payment
+    let qrCode: string | null = null;
+    try {
+      qrCode = await QRCode.toDataURL(
+        JSON.stringify({
+          bookingId: booking.id,
+          bookingCode: booking.bookingCode,
+          courtId: booking.courtId,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+        }),
+        {
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          width: 300,
+        },
+      );
+
+      // Save QR code to booking
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { qrCode },
+      });
+    } catch (error) {
+      console.error('QR code generation failed:', error);
+    }
+
+    return {
+      success: true,
+      message: 'Payment confirmed successfully',
+      booking: result.booking,
     };
   }
 }

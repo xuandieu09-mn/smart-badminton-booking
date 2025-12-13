@@ -7,7 +7,6 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
-  Patch,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { QRCodeService } from './qrcode.service';
@@ -114,24 +113,7 @@ export class BookingsController {
   }
 
   /**
-   * 🔍 Get booking by ID
-   */
-  @Get(':id')
-  async getBookingById(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: JwtUser,
-  ) {
-    // Staff/Admin can view any booking, Customer only their own
-    const userId = user.role === Role.CUSTOMER ? user.id : undefined;
-    const booking = await this.bookingsService.getBookingById(id, userId);
-    return {
-      message: 'Booking details',
-      booking,
-    };
-  }
-
-  /**
-   * 📱 Generate QR code for booking (Customer/Staff/Admin)
+   * � Generate QR code for booking (Customer/Staff/Admin)
    * QR code is generated after successful payment
    */
   @Post(':id/generate-qr')
@@ -157,6 +139,37 @@ export class BookingsController {
   }
 
   /**
+   * ❌ Cancel booking (Customer/Staff/Admin)
+   * - Customer can cancel their own bookings
+   * - Staff/Admin can cancel any booking
+   */
+  @Post(':id/cancel')
+  async cancelBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtUser,
+  ) {
+    const userId = user.role === Role.CUSTOMER ? user.id : undefined;
+    return this.bookingsService.cancelBooking(id, userId);
+  }
+
+  /**
+   * 🔍 Get booking by ID
+   */
+  @Get(':id')
+  async getBookingById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtUser,
+  ) {
+    // Staff/Admin can view any booking, Customer only their own
+    const userId = user.role === Role.CUSTOMER ? user.id : undefined;
+    const booking = await this.bookingsService.getBookingById(id, userId);
+    return {
+      message: 'Booking details',
+      booking,
+    };
+  }
+
+  /**
    * ✅ Check-in booking using QR code (Staff only)
    * Update booking status to CHECKED_IN
    */
@@ -169,8 +182,14 @@ export class BookingsController {
     const { bookingCode } = body;
 
     // Validate booking code format (allow TEST codes for development)
-    if (bookingCode && !bookingCode.startsWith('TEST') && !this.qrcodeService.validateBookingCode(bookingCode)) {
-      throw new Error('Invalid booking code format. Expected: BOOK-YYYYMMDD-XXXX');
+    if (
+      bookingCode &&
+      !bookingCode.startsWith('TEST') &&
+      !this.qrcodeService.validateBookingCode(bookingCode)
+    ) {
+      throw new Error(
+        'Invalid booking code format. Expected: BOOK-YYYYMMDD-XXXX',
+      );
     }
 
     // Check in the booking

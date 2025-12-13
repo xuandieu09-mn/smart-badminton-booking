@@ -10,11 +10,13 @@ import {
   PaymentMethod,
   Role,
 } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import type { ExpireBookingJobData } from './interfaces';
 import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 
@@ -425,6 +427,7 @@ export class BookingsService {
 
   /**
    * 🔢 Generate unique booking code
+   * Format: BK241213-XXXX (Date + Random suffix for uniqueness)
    */
   private async generateBookingCode(): Promise<string> {
     const date = new Date();
@@ -432,25 +435,38 @@ export class BookingsService {
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
 
-    // Format: BK241203-0001
+    // Format: BK241213-XXXX
     const prefix = `BK${year}${month}${day}`;
 
-    // Get today's booking count
-    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+    // Generate random 4-character suffix for uniqueness (base36: 0-9, a-z)
+    // This allows ~1.6 million unique codes per day
+    let attempts = 0;
+    const maxAttempts = 10;
 
-    const count = await this.prisma.booking.count({
-      where: {
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-    });
+    while (attempts < maxAttempts) {
+      const randomSuffix = Math.random()
+        .toString(36)
+        .substring(2, 6)
+        .toUpperCase()
+        .padEnd(4, '0');
 
-    const sequence = (count + 1).toString().padStart(4, '0');
+      const bookingCode = `${prefix}-${randomSuffix}`;
 
-    return `${prefix}-${sequence}`;
+      // Check if code already exists
+      const existing = await this.prisma.booking.findUnique({
+        where: { bookingCode },
+      });
+
+      if (!existing) {
+        return bookingCode;
+      }
+
+      attempts++;
+    }
+
+    // Fallback: Use timestamp-based suffix if random fails
+    const timestamp = Date.now().toString(36).slice(-4).toUpperCase();
+    return `${prefix}-${timestamp}`;
   }
 
   /**
@@ -665,5 +681,138 @@ export class BookingsService {
     });
 
     return updatedBooking;
+  }
+
+  /**
+   * ❌ Cancel booking
+   */
+  async cancelBooking(
+    bookingId: number,
+    userId?: number,
+  ): Promise<{ message: string; booking: any }> {
+    // Get booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        court: true,
+        user: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking #${bookingId} not found`);
+    }
+
+    // Verify ownership (if customer)
+    if (userId && booking.userId !== userId) {
+      throw new ForbiddenException('You can only cancel your own bookings');
+    }
+
+    // Check if booking can be cancelled
+    if (!['PENDING_PAYMENT', 'CONFIRMED'].includes(booking.status)) {
+      throw new BadRequestException(
+        `Cannot cancel booking with status: ${booking.status}`,
+      );
+    }
+
+    // Update status to CANCELLED
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+      },
+    });
+
+    // If booking was CONFIRMED (already paid), process refund with time-based policy
+    if (booking.status === BookingStatus.CONFIRMED && booking.userId) {
+      // Calculate hours until booking starts
+      const now = new Date();
+      const bookingStart = new Date(booking.startTime);
+      const hoursUntilBooking = (bookingStart.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      // Determine refund percentage based on cancellation time
+      let refundPercentage = 0;
+      let refundReason = '';
+
+      if (hoursUntilBooking > 24) {
+        refundPercentage = 100;
+        refundReason = 'Full refund (cancelled >24h before)';
+      } else if (hoursUntilBooking > 12) {
+        refundPercentage = 50;
+        refundReason = 'Partial refund 50% (cancelled 12-24h before)';
+      } else {
+        refundPercentage = 0;
+        refundReason = 'No refund (cancelled <12h before)';
+      }
+
+      const refundAmount = new Decimal(
+        (Number(booking.totalPrice) * refundPercentage) / 100
+      );
+
+      // Process refund if amount > 0
+      if (refundPercentage > 0) {
+        await this.prisma.$transaction(async (tx) => {
+          // Find payment
+          const payment = await tx.payment.findFirst({
+            where: {
+              bookingId: booking.id,
+              status: PaymentStatus.PAID,
+            },
+          });
+
+          if (payment) {
+            // Get wallet before update
+            const walletBefore = await tx.wallet.findUnique({
+              where: { userId: booking.userId! },
+            });
+
+            if (!walletBefore) {
+              throw new NotFoundException('Wallet not found');
+            }
+
+            // Refund to wallet
+            await tx.wallet.update({
+              where: { userId: booking.userId! },
+              data: {
+                balance: {
+                  increment: refundAmount,
+                },
+              },
+            });
+
+            // Get updated wallet
+            const walletAfter = await tx.wallet.findUnique({
+              where: { userId: booking.userId! },
+            });
+
+            // Create refund transaction
+            await tx.walletTransaction.create({
+              data: {
+                walletId: walletBefore.id,
+                type: 'REFUND',
+                amount: refundAmount,
+                description: `${refundReason} - Booking ${booking.bookingCode}`,
+                bookingId: booking.id,
+                balanceBefore: walletBefore.balance,
+                balanceAfter: walletAfter!.balance,
+              },
+            });
+
+            // Update payment status
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: refundPercentage === 100 ? PaymentStatus.REFUNDED : PaymentStatus.PAID,
+              },
+            });
+          }
+        });
+      }
+    }
+
+    return {
+      message: 'Booking cancelled successfully',
+      booking: updatedBooking,
+    };
   }
 }
