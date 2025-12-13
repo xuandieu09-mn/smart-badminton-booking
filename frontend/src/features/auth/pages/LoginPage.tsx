@@ -22,7 +22,15 @@ export const LoginPage = () => {
       const { access_token, user } = response.data;
 
       setAuth(user, access_token);
-      navigate('/calendar');
+      
+      // Redirect based on user role
+      if (user.role === 'ADMIN') {
+        navigate('/admin');
+      } else if (user.role === 'STAFF') {
+        navigate('/staff');
+      } else {
+        navigate('/calendar');
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {
@@ -76,6 +84,43 @@ export const LoginPage = () => {
           Register
         </Link>
       </p>
+
+      {/* Quick Login Section */}
+      <div className="mt-6 pt-6 border-t border-gray-200">
+        <p className="text-sm text-gray-600 mb-3 text-center font-semibold">🚀 Quick Login (Test)</p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('customer1@test.com');
+              setPassword('password123');
+            }}
+            className="px-3 py-2 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100 border border-green-200"
+          >
+            👤 Customer
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('staff@badminton.com');
+              setPassword('Staff@123');
+            }}
+            className="px-3 py-2 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 border border-blue-200"
+          >
+            👨‍✈️ Staff
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('admin@badminton.com');
+              setPassword('Admin@123');
+            }}
+            className="px-3 py-2 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100 border border-purple-200"
+          >
+            👨‍💼 Admin
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

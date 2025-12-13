@@ -216,6 +216,112 @@ export class CourtsService {
   }
 
   /**
+   * Get real-time status of all courts
+   * For Staff dashboard - shows current and upcoming bookings
+   */
+  async getRealtimeStatus() {
+    const now = new Date();
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Get all active courts
+    const courts = await this.prisma.court.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    // Get all bookings for today
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        startTime: {
+          lte: endOfDay,
+        },
+        endTime: {
+          gte: now,
+        },
+        status: {
+          in: ['CONFIRMED', 'CHECKED_IN', 'PENDING_PAYMENT'],
+        },
+      },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    // Map courts with their bookings and status
+    const courtStatuses = courts.map((court) => {
+      const courtBookings = bookings.filter((b) => b.courtId === court.id);
+      
+      // Find current booking (now is between start and end time)
+      const currentBooking = courtBookings.find(
+        (b) => new Date(b.startTime) <= now && new Date(b.endTime) > now,
+      );
+
+      // Find next booking
+      const nextBooking = courtBookings.find(
+        (b) => new Date(b.startTime) > now,
+      );
+
+      // Determine status
+      let status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED';
+      if (currentBooking) {
+        status = currentBooking.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
+      } else {
+        status = 'AVAILABLE';
+      }
+
+      return {
+        courtId: court.id,
+        courtName: court.name,
+        status,
+        currentBooking: currentBooking
+          ? {
+              id: currentBooking.id,
+              bookingCode: currentBooking.bookingCode,
+              startTime: currentBooking.startTime,
+              endTime: currentBooking.endTime,
+              status: currentBooking.status,
+              userName: currentBooking.user?.name || currentBooking.guestName,
+              userEmail: currentBooking.user?.email || null,
+            }
+          : null,
+        nextBooking: nextBooking
+          ? {
+              id: nextBooking.id,
+              bookingCode: nextBooking.bookingCode,
+              startTime: nextBooking.startTime,
+              endTime: nextBooking.endTime,
+              status: nextBooking.status,
+              userName: nextBooking.user?.name || nextBooking.guestName,
+            }
+          : null,
+        todayBookings: courtBookings.length,
+      };
+    });
+
+    return {
+      timestamp: now,
+      courts: courtStatuses,
+      summary: {
+        totalCourts: courts.length,
+        available: courtStatuses.filter((c) => c.status === 'AVAILABLE').length,
+        occupied: courtStatuses.filter((c) => c.status === 'OCCUPIED').length,
+        reserved: courtStatuses.filter((c) => c.status === 'RESERVED').length,
+      },
+    };
+  }
+
+  /**
    * Helper: Map entity to DTO
    */
   private mapToResponse(court: Court): CourtResponseDto {

@@ -34,6 +34,19 @@ export class CourtsController {
   }
 
   /**
+   * GET /courts/realtime-status
+   * Get real-time status of all courts (for Staff dashboard)
+   * Shows current bookings and upcoming slots
+   * IMPORTANT: Must be before :id route to avoid routing conflict
+   */
+  @Get('realtime-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getRealtimeStatus() {
+    return this.courtsService.getRealtimeStatus();
+  }
+
+  /**
    * GET /courts/:id
    * Get court by ID
    */

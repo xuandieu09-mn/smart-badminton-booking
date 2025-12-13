@@ -596,4 +596,74 @@ export class BookingsService {
       },
     });
   }
+
+  /**
+   * ✅ Check-in booking using booking code (Staff only)
+   * Update status from CONFIRMED to CHECKED_IN
+   */
+  async checkInBooking(bookingCode: string) {
+    // Find booking by code
+    const booking = await this.prisma.booking.findUnique({
+      where: { bookingCode },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking not found: ${bookingCode}`);
+    }
+
+    // Check if booking is CONFIRMED
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        `Booking cannot be checked in. Current status: ${booking.status}`,
+      );
+    }
+
+    // Check if booking time is valid (not too early, not expired)
+    const now = new Date();
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+
+    // Allow check-in 15 minutes before start time
+    const earlyCheckInTime = new Date(startTime.getTime() - 15 * 60 * 1000);
+
+    if (now < earlyCheckInTime) {
+      throw new BadRequestException(
+        'Too early to check in. You can check in 15 minutes before start time.',
+      );
+    }
+
+    if (now > endTime) {
+      throw new BadRequestException('Booking time has expired.');
+    }
+
+    // Update status to CHECKED_IN
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: BookingStatus.CHECKED_IN,
+      },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return updatedBooking;
+  }
 }

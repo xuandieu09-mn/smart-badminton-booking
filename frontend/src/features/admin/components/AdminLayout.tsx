@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../hooks/useAuth';
+import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../../../store/authStore';
 
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
-
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const location = useLocation();
+  const { logout, user } = useAuthStore();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const isActive = (path: string) => {
+    if (path === '/admin') {
+      return location.pathname === '/admin';
+    }
+    return location.pathname.startsWith(path);
   };
 
   const menuItems = [
@@ -47,7 +51,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition-colors"
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive(item.path)
+                  ? 'bg-indigo-700 text-white font-semibold'
+                  : 'hover:bg-indigo-800'
+              }`}
             >
               <span className="text-xl">{item.icon}</span>
               {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
@@ -63,7 +71,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
             {sidebarOpen && (
               <div className="text-sm">
-                <p className="font-medium">{user?.fullName || 'Admin'}</p>
+                <p className="font-medium">{user?.fullName || user?.name || 'Admin'}</p>
                 <p className="text-indigo-300 text-xs">Quản trị viên</p>
               </div>
             )}
@@ -110,7 +118,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         {/* Content Area */}
         <div className="flex-1 overflow-auto">
           <div className="p-6">
-            {children}
+            <Outlet />
           </div>
         </div>
       </div>

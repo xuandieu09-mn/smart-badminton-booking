@@ -7,8 +7,10 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
+  Patch,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
+import { QRCodeService } from './qrcode.service';
 import { CreateBookingDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -22,7 +24,10 @@ type JwtUser = UserInterface.JwtUser;
 @Controller('bookings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class BookingsController {
-  constructor(private bookingsService: BookingsService) {}
+  constructor(
+    private bookingsService: BookingsService,
+    private qrcodeService: QRCodeService,
+  ) {}
 
   /**
    * 📅 Create new booking
@@ -122,6 +127,66 @@ export class BookingsController {
     return {
       message: 'Booking details',
       booking,
+    };
+  }
+
+  /**
+   * 📱 Generate QR code for booking (Customer/Staff/Admin)
+   * QR code is generated after successful payment
+   */
+  @Post(':id/generate-qr')
+  async generateQRCode(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtUser,
+  ) {
+    // Verify booking exists and belongs to user (if customer)
+    const userId = user.role === Role.CUSTOMER ? user.id : undefined;
+    const booking = await this.bookingsService.getBookingById(id, userId);
+
+    // Generate QR code with booking code
+    const qrCodeDataURL = await this.qrcodeService.generateBookingQR(
+      booking.bookingCode,
+    );
+
+    return {
+      message: 'QR code generated successfully',
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      qrCode: qrCodeDataURL,
+    };
+  }
+
+  /**
+   * ✅ Check-in booking using QR code (Staff only)
+   * Update booking status to CHECKED_IN
+   */
+  @Post('check-in')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async checkInBooking(
+    @Body() body: { bookingCode: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    const { bookingCode } = body;
+
+    // Validate booking code format
+    if (!this.qrcodeService.validateBookingCode(bookingCode)) {
+      throw new Error('Invalid booking code format');
+    }
+
+    // Check in the booking
+    const booking = await this.bookingsService.checkInBooking(bookingCode);
+
+    return {
+      message: 'Check-in successful',
+      booking: {
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        courtId: booking.courtId,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        status: booking.status,
+      },
+      checkedInBy: user.email,
     };
   }
 }

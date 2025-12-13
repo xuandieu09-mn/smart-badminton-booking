@@ -8,7 +8,16 @@ import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { CalendarPage } from '../features/calendar/pages/CalendarPage';
 import { BookingPage } from '../features/booking/pages/BookingPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
+import AdminLayout from '../features/admin/components/AdminLayout';
 import AdminDashboard from '../features/admin/pages/AdminDashboard';
+import AdminBookingsPage from '../features/admin/pages/AdminBookingsPage';
+import AdminCourtsPage from '../features/admin/pages/AdminCourtsPage';
+import AdminPaymentsPage from '../features/admin/pages/AdminPaymentsPage';
+import AdminUsersPage from '../features/admin/pages/AdminUsersPage';
+import AdminReportsPage from '../features/admin/pages/AdminReportsPage';
+import StaffLayout from '../features/staff/layouts/StaffLayout';
+import StaffDashboard from '../features/staff/pages/StaffDashboard';
+import CheckInPage from '../features/staff/pages/CheckInPage';
 import { NotFound } from '../features/common/components/NotFound';
 
 const HomePage: React.FC = () => (
@@ -41,9 +50,71 @@ export const router = createBrowserRouter([
     path: '/admin',
     element: (
       <ProtectedRoute requiredRole="ADMIN">
-        <AdminDashboard />
+        <AdminLayout />
       </ProtectedRoute>
     ),
+    children: [
+      {
+        index: true,
+        element: <AdminDashboard />,
+      },
+      {
+        path: 'bookings',
+        element: <AdminBookingsPage />,
+      },
+      {
+        path: 'courts',
+        element: <AdminCourtsPage />,
+      },
+      {
+        path: 'payments',
+        element: <AdminPaymentsPage />,
+      },
+      {
+        path: 'users',
+        element: <AdminUsersPage />,
+      },
+      {
+        path: 'reports',
+        element: <AdminReportsPage />,
+      },
+    ],
+  },
+  {
+    path: '/staff',
+    element: (
+      <ProtectedRoute requiredRole="STAFF">
+        <StaffLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <StaffDashboard />,
+      },
+      {
+        path: 'checkin',
+        element: <CheckInPage />,
+      },
+      {
+        path: 'courts',
+        element: (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Trạng thái sân</h1>
+            <p className="text-gray-600">Real-time court monitoring (Day 14)</p>
+          </div>
+        ),
+      },
+      {
+        path: 'pos',
+        element: (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">POS System</h1>
+            <p className="text-gray-600">Point of Sale (Day 18)</p>
+          </div>
+        ),
+      },
+    ],
   },
   {
     path: '/',
