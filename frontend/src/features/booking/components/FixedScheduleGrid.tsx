@@ -28,7 +28,15 @@ interface SelectedSlot {
   courtId: number;
 }
 
-const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+const WEEKDAYS = [
+  'Chủ nhật',
+  'Thứ 2',
+  'Thứ 3',
+  'Thứ 4',
+  'Thứ 5',
+  'Thứ 6',
+  'Thứ 7',
+];
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 6); // 6:00 - 20:00
 
 export const FixedScheduleGrid: React.FC = () => {
@@ -39,7 +47,9 @@ export const FixedScheduleGrid: React.FC = () => {
   const [duration, setDuration] = useState<number>(3); // months
   const [pattern] = useState<'WEEKLY'>('WEEKLY'); // Fixed to weekly for now
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
-  const [availability, setAvailability] = useState<Map<string, TimeSlotAvailability>>(new Map());
+  const [availability, setAvailability] = useState<
+    Map<string, TimeSlotAvailability>
+  >(new Map());
   const [loading, setLoading] = useState(false);
   const [hoveredSlot, setHoveredSlot] = useState<string | null>(null);
 
@@ -69,7 +79,7 @@ export const FixedScheduleGrid: React.FC = () => {
   const generateRecurringDates = (dayOfWeek: number): Date[] => {
     const dates: Date[] = [];
     const occurrences = duration * 4; // Approximate weeks in duration months
-    
+
     // Find first occurrence
     let currentDate = new Date(startDate);
     while (currentDate.getDay() !== dayOfWeek) {
@@ -88,7 +98,7 @@ export const FixedScheduleGrid: React.FC = () => {
   const checkSlotAvailability = async (
     courtId: number,
     dayOfWeek: number,
-    hour: number
+    hour: number,
   ): Promise<TimeSlotAvailability> => {
     try {
       const response = await API.post(
@@ -104,12 +114,13 @@ export const FixedScheduleGrid: React.FC = () => {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       return {
         status: response.data.status,
-        conflictDates: response.data.conflictDates?.map((d: string) => new Date(d)) || [],
+        conflictDates:
+          response.data.conflictDates?.map((d: string) => new Date(d)) || [],
         availableCount: response.data.availableCount,
         totalCount: response.data.totalCount,
       };
@@ -119,7 +130,7 @@ export const FixedScheduleGrid: React.FC = () => {
       const dates = generateRecurringDates(dayOfWeek);
       const conflictDates: Date[] = [];
       const randomConflictChance = Math.random();
-      
+
       if (randomConflictChance < 0.15) {
         // 15% chance of being completely busy
         return {
@@ -131,7 +142,9 @@ export const FixedScheduleGrid: React.FC = () => {
         // 20% chance of partial conflicts
         const numConflicts = Math.floor(Math.random() * 3) + 1;
         for (let i = 0; i < numConflicts && i < dates.length; i++) {
-          conflictDates.push(dates[i * Math.floor(dates.length / numConflicts)]);
+          conflictDates.push(
+            dates[i * Math.floor(dates.length / numConflicts)],
+          );
         }
         return {
           status: 'partial',
@@ -152,14 +165,18 @@ export const FixedScheduleGrid: React.FC = () => {
 
   const calculateAvailability = async () => {
     if (!selectedCourt) return;
-    
+
     setLoading(true);
     const newAvailability = new Map<string, TimeSlotAvailability>();
 
     for (const dayOfWeek of [0, 1, 2, 3, 4, 5, 6]) {
       for (const hour of HOURS) {
         const key = `${selectedCourt.id}-${dayOfWeek}-${hour}`;
-        const availability = await checkSlotAvailability(selectedCourt.id, dayOfWeek, hour);
+        const availability = await checkSlotAvailability(
+          selectedCourt.id,
+          dayOfWeek,
+          hour,
+        );
         newAvailability.set(key, availability);
       }
     }
@@ -170,27 +187,27 @@ export const FixedScheduleGrid: React.FC = () => {
 
   const toggleSlot = (dayOfWeek: number, hour: number) => {
     if (!selectedCourt) return;
-    
+
     const key = `${selectedCourt.id}-${dayOfWeek}-${hour}`;
     const status = availability.get(key)?.status;
-    
+
     if (status === 'busy') return; // Can't select busy slots
-    
+
     const slotKey = `${dayOfWeek}-${hour}`;
     const newSelected = new Set(selectedSlots);
-    
+
     if (newSelected.has(slotKey)) {
       newSelected.delete(slotKey);
     } else {
       newSelected.add(slotKey);
     }
-    
+
     setSelectedSlots(newSelected);
   };
 
   const getSlotColor = (dayOfWeek: number, hour: number): string => {
     if (!selectedCourt) return 'bg-gray-100';
-    
+
     const key = `${selectedCourt.id}-${dayOfWeek}-${hour}`;
     const slotKey = `${dayOfWeek}-${hour}`;
     const isSelected = selectedSlots.has(slotKey);
@@ -214,7 +231,7 @@ export const FixedScheduleGrid: React.FC = () => {
 
   const getSlotIcon = (dayOfWeek: number, hour: number): string => {
     if (!selectedCourt) return '';
-    
+
     const key = `${selectedCourt.id}-${dayOfWeek}-${hour}`;
     const status = availability.get(key)?.status;
 
@@ -234,7 +251,7 @@ export const FixedScheduleGrid: React.FC = () => {
   const calculateSummary = () => {
     if (!selectedCourt) return null;
 
-    const slots = Array.from(selectedSlots).map(key => {
+    const slots = Array.from(selectedSlots).map((key) => {
       const [dayOfWeek, hour] = key.split('-').map(Number);
       const availKey = `${selectedCourt.id}-${dayOfWeek}-${hour}`;
       const avail = availability.get(availKey);
@@ -245,9 +262,12 @@ export const FixedScheduleGrid: React.FC = () => {
       };
     });
 
-    const totalSessions = slots.reduce((sum, slot) => sum + (slot.availability?.availableCount || 0), 0);
+    const totalSessions = slots.reduce(
+      (sum, slot) => sum + (slot.availability?.availableCount || 0),
+      0,
+    );
     const excludedDates: Date[] = [];
-    slots.forEach(slot => {
+    slots.forEach((slot) => {
       if (slot.availability?.conflictDates) {
         excludedDates.push(...slot.availability.conflictDates);
       }
@@ -272,7 +292,9 @@ export const FixedScheduleGrid: React.FC = () => {
     }
 
     // Implementation for submitting recurring bookings
-    alert('Chức năng đang phát triển - Sẽ tạo booking cho tất cả các slot đã chọn');
+    alert(
+      'Chức năng đang phát triển - Sẽ tạo booking cho tất cả các slot đã chọn',
+    );
   };
 
   return (
@@ -288,14 +310,17 @@ export const FixedScheduleGrid: React.FC = () => {
             <select
               value={selectedCourt?.id || ''}
               onChange={(e) => {
-                const court = courts.find(c => c.id === parseInt(e.target.value));
+                const court = courts.find(
+                  (c) => c.id === parseInt(e.target.value),
+                );
                 setSelectedCourt(court || null);
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             >
-              {courts.map(court => (
+              {courts.map((court) => (
                 <option key={court.id} value={court.id}>
-                  {court.name} - {new Intl.NumberFormat('vi-VN').format(court.pricePerHour)}đ/h
+                  {court.name} -{' '}
+                  {new Intl.NumberFormat('vi-VN').format(court.pricePerHour)}đ/h
                 </option>
               ))}
             </select>
@@ -309,7 +334,9 @@ export const FixedScheduleGrid: React.FC = () => {
             <input
               type="date"
               value={format(startDate, 'yyyy-MM-dd')}
-              onChange={(e) => setStartDate(new Date(e.target.value + 'T00:00:00'))}
+              onChange={(e) =>
+                setStartDate(new Date(e.target.value + 'T00:00:00'))
+              }
               min={format(new Date(), 'yyyy-MM-dd')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             />
@@ -346,15 +373,21 @@ export const FixedScheduleGrid: React.FC = () => {
         {/* Legend */}
         <div className="mt-4 flex flex-wrap gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-green-100 border border-green-300 rounded flex items-center justify-center text-green-700 font-bold">✓</div>
+            <div className="w-6 h-6 bg-green-100 border border-green-300 rounded flex items-center justify-center text-green-700 font-bold">
+              ✓
+            </div>
             <span className="text-gray-700">Trống hoàn toàn</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-yellow-100 border border-yellow-300 rounded flex items-center justify-center text-yellow-700 font-bold">⚠</div>
+            <div className="w-6 h-6 bg-yellow-100 border border-yellow-300 rounded flex items-center justify-center text-yellow-700 font-bold">
+              ⚠
+            </div>
             <span className="text-gray-700">Bận một vài ngày</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-gray-200 border border-gray-300 rounded flex items-center justify-center text-gray-500 font-bold">✕</div>
+            <div className="w-6 h-6 bg-gray-200 border border-gray-300 rounded flex items-center justify-center text-gray-500 font-bold">
+              ✕
+            </div>
             <span className="text-gray-700">Đã kín</span>
           </div>
           <div className="flex items-center gap-2">
@@ -369,7 +402,8 @@ export const FixedScheduleGrid: React.FC = () => {
         <div className="p-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white">
           <h3 className="text-lg font-bold">🗓 Lịch trống - Click để chọn</h3>
           <p className="text-sm text-purple-100 mt-1">
-            Mỗi ô = tất cả các {WEEKDAYS[startDate.getDay()]} trong {duration} tháng
+            Mỗi ô = tất cả các {WEEKDAYS[startDate.getDay()]} trong {duration}{' '}
+            tháng
           </p>
         </div>
 
@@ -397,22 +431,19 @@ export const FixedScheduleGrid: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {HOURS.map(hour => (
+                {HOURS.map((hour) => (
                   <tr key={hour} className="border-b hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-4 py-2 text-sm font-medium text-gray-700 border-r">
                       {String(hour).padStart(2, '0')}:00
                     </td>
-                    {[0, 1, 2, 3, 4, 5, 6].map(dayOfWeek => {
+                    {[0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
                       const slotKey = `${dayOfWeek}-${hour}`;
                       const availKey = `${selectedCourt?.id}-${dayOfWeek}-${hour}`;
                       const avail = availability.get(availKey);
                       const isHovered = hoveredSlot === slotKey;
 
                       return (
-                        <td
-                          key={dayOfWeek}
-                          className="p-1 relative"
-                        >
+                        <td key={dayOfWeek} className="p-1 relative">
                           <button
                             onClick={() => toggleSlot(dayOfWeek, hour)}
                             onMouseEnter={() => setHoveredSlot(slotKey)}
@@ -428,21 +459,34 @@ export const FixedScheduleGrid: React.FC = () => {
                           </button>
 
                           {/* Tooltip for partial conflicts */}
-                          {isHovered && avail?.status === 'partial' && avail.conflictDates && (
-                            <div className="absolute z-20 bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
-                              <div className="font-semibold mb-1">Bận vào:</div>
-                              {avail.conflictDates.slice(0, 3).map((date, idx) => (
-                                <div key={idx}>{format(date, 'dd/MM/yyyy', { locale: vi })}</div>
-                              ))}
-                              {avail.conflictDates.length > 3 && (
-                                <div>+{avail.conflictDates.length - 3} ngày nữa</div>
-                              )}
-                              <div className="text-yellow-300 mt-1">
-                                {avail.availableCount}/{avail.totalCount} buổi trống
+                          {isHovered &&
+                            avail?.status === 'partial' &&
+                            avail.conflictDates && (
+                              <div className="absolute z-20 bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                                <div className="font-semibold mb-1">
+                                  Bận vào:
+                                </div>
+                                {avail.conflictDates
+                                  .slice(0, 3)
+                                  .map((date, idx) => (
+                                    <div key={idx}>
+                                      {format(date, 'dd/MM/yyyy', {
+                                        locale: vi,
+                                      })}
+                                    </div>
+                                  ))}
+                                {avail.conflictDates.length > 3 && (
+                                  <div>
+                                    +{avail.conflictDates.length - 3} ngày nữa
+                                  </div>
+                                )}
+                                <div className="text-yellow-300 mt-1">
+                                  {avail.availableCount}/{avail.totalCount} buổi
+                                  trống
+                                </div>
+                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                               </div>
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          )}
+                            )}
                         </td>
                       );
                     })}
@@ -457,13 +501,17 @@ export const FixedScheduleGrid: React.FC = () => {
       {/* Footer Summary */}
       {summary && selectedSlots.size > 0 && (
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg shadow-lg border-2 border-purple-200 p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">📋 Tóm tắt đặt lịch</h3>
-          
+          <h3 className="text-xl font-bold text-gray-900 mb-4">
+            📋 Tóm tắt đặt lịch
+          </h3>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left: Selection details */}
             <div className="space-y-3">
               <div>
-                <div className="text-sm text-gray-600">Các khung giờ đã chọn:</div>
+                <div className="text-sm text-gray-600">
+                  Các khung giờ đã chọn:
+                </div>
                 <div className="mt-2 space-y-1">
                   {summary.slots.map((slot, idx) => (
                     <div key={idx} className="flex items-center gap-2 text-sm">
@@ -471,7 +519,8 @@ export const FixedScheduleGrid: React.FC = () => {
                         {WEEKDAYS[slot.dayOfWeek]}
                       </span>
                       <span className="text-gray-700">
-                        {String(slot.hour).padStart(2, '0')}:00 - {String(slot.hour + 2).padStart(2, '0')}:00
+                        {String(slot.hour).padStart(2, '0')}:00 -{' '}
+                        {String(slot.hour + 2).padStart(2, '0')}:00
                       </span>
                       <span className="text-xs text-gray-500">
                         ({slot.availability?.availableCount} buổi)
@@ -488,7 +537,9 @@ export const FixedScheduleGrid: React.FC = () => {
                   </div>
                   <div className="text-xs text-yellow-700 space-y-1">
                     {summary.excludedDates.slice(0, 5).map((date, idx) => (
-                      <div key={idx}>{format(date, 'dd/MM/yyyy', { locale: vi })}</div>
+                      <div key={idx}>
+                        {format(date, 'dd/MM/yyyy', { locale: vi })}
+                      </div>
                     ))}
                     {summary.excludedDates.length > 5 && (
                       <div>+{summary.excludedDates.length - 5} ngày nữa</div>
@@ -507,7 +558,7 @@ export const FixedScheduleGrid: React.FC = () => {
                     {summary.totalSessions} buổi
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Giá mỗi buổi:</span>
                   <span className="font-semibold text-gray-900">
@@ -520,7 +571,9 @@ export const FixedScheduleGrid: React.FC = () => {
 
                 <div className="border-t pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-gray-900">Tạm tính:</span>
+                    <span className="text-lg font-bold text-gray-900">
+                      Tạm tính:
+                    </span>
                     <span className="text-2xl font-bold text-purple-600">
                       {new Intl.NumberFormat('vi-VN', {
                         style: 'currency',
@@ -551,7 +604,8 @@ export const FixedScheduleGrid: React.FC = () => {
             Hãy chọn các khung giờ trên lịch
           </h3>
           <p className="text-gray-600">
-            Click vào các ô màu xanh hoặc vàng để chọn khung giờ bạn muốn đặt cố định
+            Click vào các ô màu xanh hoặc vàng để chọn khung giờ bạn muốn đặt cố
+            định
           </p>
         </div>
       )}

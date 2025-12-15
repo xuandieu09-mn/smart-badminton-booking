@@ -4,7 +4,9 @@ export const AdminUsersPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Quản lý Người dùng</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">
+          Quản lý Người dùng
+        </h1>
         <p className="text-gray-600">
           Quản lý tài khoản khách hàng, nhân viên, và admin
         </p>
@@ -14,7 +16,9 @@ export const AdminUsersPage: React.FC = () => {
         <div className="flex items-start gap-3">
           <div className="text-3xl">👥</div>
           <div>
-            <h3 className="font-semibold text-yellow-900 mb-2">Tính năng đang phát triển</h3>
+            <h3 className="font-semibold text-yellow-900 mb-2">
+              Tính năng đang phát triển
+            </h3>
             <p className="text-yellow-800 text-sm mb-3">
               Trang này sẽ hiển thị:
             </p>

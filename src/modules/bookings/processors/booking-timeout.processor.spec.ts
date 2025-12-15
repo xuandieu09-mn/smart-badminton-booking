@@ -125,9 +125,9 @@ describe('BookingTimeoutProcessor', () => {
 
       const mockJob = createMockJob(1);
 
-      await expect(
-        processor.handleBookingExpiration(mockJob),
-      ).rejects.toThrow('Database error');
+      await expect(processor.handleBookingExpiration(mockJob)).rejects.toThrow(
+        'Database error',
+      );
     });
   });
 });

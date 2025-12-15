@@ -49,6 +49,14 @@ export class WalletController {
   }
 
   /**
+   * 💰 Self top-up (Customer can add money to their own wallet - simulation)
+   */
+  @Post('topup')
+  topup(@CurrentUser() user: JwtUser, @Body() dto: DepositDto) {
+    return this.walletService.topup(user.id, dto.amount);
+  }
+
+  /**
    * 💸 Pay booking with wallet
    */
   @Post('pay/:bookingId')

@@ -48,21 +48,22 @@ export const NotFound = () => {
         <p className="text-gray-500 mb-8">
           Đường dẫn bạn đang tìm không có trong hệ thống
         </p>
-        
+
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-blue-800 text-sm">
-            Tự động chuyển về <strong>{getRoleName()}</strong> sau <strong>{countdown}</strong> giây...
+            Tự động chuyển về <strong>{getRoleName()}</strong> sau{' '}
+            <strong>{countdown}</strong> giây...
           </p>
         </div>
 
         <div className="flex gap-3 justify-center">
-          <Link 
-            to={redirectPath} 
+          <Link
+            to={redirectPath}
             className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Về {getRoleName()}
           </Link>
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="px-6 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
           >

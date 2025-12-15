@@ -7,7 +7,12 @@ interface BookingDetail {
   bookingCode: string;
   startTime: string;
   endTime: string;
-  status: 'PENDING_PAYMENT' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  status:
+    | 'PENDING_PAYMENT'
+    | 'CONFIRMED'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'EXPIRED';
   expiresAt?: string | null;
 }
 
@@ -28,14 +33,52 @@ const PATTERN_LABELS: Record<string, string> = {
   MONTHLY: 'Hàng tháng',
 };
 
-const WEEKDAY_LABELS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+const WEEKDAY_LABELS = [
+  'Chủ nhật',
+  'Thứ 2',
+  'Thứ 3',
+  'Thứ 4',
+  'Thứ 5',
+  'Thứ 6',
+  'Thứ 7',
+];
 
 const STATUS_CONFIG = {
-  PENDING_PAYMENT: { color: 'orange', label: 'Chờ thanh toán', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-  CONFIRMED: { color: 'green', label: 'Đã xác nhận', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-  COMPLETED: { color: 'blue', label: 'Hoàn thành', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  CANCELLED: { color: 'gray', label: 'Đã hủy', bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
-  EXPIRED: { color: 'red', label: 'Hết hạn', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+  PENDING_PAYMENT: {
+    color: 'orange',
+    label: 'Chờ thanh toán',
+    bg: 'bg-orange-50',
+    text: 'text-orange-700',
+    border: 'border-orange-200',
+  },
+  CONFIRMED: {
+    color: 'green',
+    label: 'Đã xác nhận',
+    bg: 'bg-green-50',
+    text: 'text-green-700',
+    border: 'border-green-200',
+  },
+  COMPLETED: {
+    color: 'blue',
+    label: 'Hoàn thành',
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    border: 'border-blue-200',
+  },
+  CANCELLED: {
+    color: 'gray',
+    label: 'Đã hủy',
+    bg: 'bg-gray-50',
+    text: 'text-gray-700',
+    border: 'border-gray-200',
+  },
+  EXPIRED: {
+    color: 'red',
+    label: 'Hết hạn',
+    bg: 'bg-red-50',
+    text: 'text-red-700',
+    border: 'border-red-200',
+  },
 };
 
 export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
@@ -52,16 +95,26 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
 
   // Calculate summary
   const totalBookings = bookings.length;
-  const pendingCount = bookings.filter(b => b.status === 'PENDING_PAYMENT').length;
-  const confirmedCount = bookings.filter(b => b.status === 'CONFIRMED').length;
-  const completedCount = bookings.filter(b => b.status === 'COMPLETED').length;
-  const cancelledCount = bookings.filter(b => b.status === 'CANCELLED').length;
-  const expiredCount = bookings.filter(b => b.status === 'EXPIRED').length;
+  const pendingCount = bookings.filter(
+    (b) => b.status === 'PENDING_PAYMENT',
+  ).length;
+  const confirmedCount = bookings.filter(
+    (b) => b.status === 'CONFIRMED',
+  ).length;
+  const completedCount = bookings.filter(
+    (b) => b.status === 'COMPLETED',
+  ).length;
+  const cancelledCount = bookings.filter(
+    (b) => b.status === 'CANCELLED',
+  ).length;
+  const expiredCount = bookings.filter((b) => b.status === 'EXPIRED').length;
 
   // Calculate total duration
   const firstBooking = bookings[0];
   const duration = firstBooking
-    ? (new Date(firstBooking.endTime).getTime() - new Date(firstBooking.startTime).getTime()) / (1000 * 60 * 60)
+    ? (new Date(firstBooking.endTime).getTime() -
+        new Date(firstBooking.startTime).getTime()) /
+      (1000 * 60 * 60)
     : 0;
   const totalHours = duration * totalBookings;
 
@@ -84,7 +137,9 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
   const statusConfig = STATUS_CONFIG[mainStatus];
 
   // Calculate remaining time for first pending booking
-  const firstPending = bookings.find(b => b.status === 'PENDING_PAYMENT' && b.expiresAt);
+  const firstPending = bookings.find(
+    (b) => b.status === 'PENDING_PAYMENT' && b.expiresAt,
+  );
   const getRemainingTime = () => {
     if (!firstPending?.expiresAt) return null;
     const now = Date.now();
@@ -106,7 +161,9 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
   }, [firstPending]);
 
   return (
-    <div className={`border-2 ${statusConfig.border} ${statusConfig.bg} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition`}>
+    <div
+      className={`border-2 ${statusConfig.border} ${statusConfig.bg} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition`}
+    >
       {/* Header - Collapsed View */}
       <div className="p-4">
         <div className="flex items-start justify-between">
@@ -116,13 +173,16 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
               <div>
                 <h3 className="font-bold text-lg text-gray-900">{courtName}</h3>
                 <p className="text-sm text-gray-600">
-                  {WEEKDAY_LABELS[dayOfWeek]} • {PATTERN_LABELS[pattern]} • {timeRange}
+                  {WEEKDAY_LABELS[dayOfWeek]} • {PATTERN_LABELS[pattern]} •{' '}
+                  {timeRange}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2 mt-3">
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border}`}
+              >
                 {statusConfig.label}
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
@@ -151,9 +211,15 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
 
               {/* Status summary */}
               <div className="text-xs text-gray-600 space-y-1">
-                {pendingCount > 0 && <div>⏳ {pendingCount} chờ thanh toán</div>}
-                {confirmedCount > 0 && <div>✅ {confirmedCount} đã xác nhận</div>}
-                {completedCount > 0 && <div>🏆 {completedCount} hoàn thành</div>}
+                {pendingCount > 0 && (
+                  <div>⏳ {pendingCount} chờ thanh toán</div>
+                )}
+                {confirmedCount > 0 && (
+                  <div>✅ {confirmedCount} đã xác nhận</div>
+                )}
+                {completedCount > 0 && (
+                  <div>🏆 {completedCount} hoàn thành</div>
+                )}
                 {cancelledCount > 0 && <div>❌ {cancelledCount} đã hủy</div>}
                 {expiredCount > 0 && <div>⏰ {expiredCount} hết hạn</div>}
               </div>
@@ -169,7 +235,7 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
           >
             {isExpanded ? '▲ Thu gọn' : '▼ Xem chi tiết'}
           </button>
-          
+
           {pendingCount > 0 && onPayAll && (
             <button
               onClick={() => onPayAll(recurrenceGroupId)}
@@ -193,7 +259,9 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
       {/* Expanded View - Booking Details */}
       {isExpanded && (
         <div className="border-t-2 border-gray-200 bg-white p-4">
-          <h4 className="font-semibold text-gray-800 mb-3">Chi tiết từng buổi:</h4>
+          <h4 className="font-semibold text-gray-800 mb-3">
+            Chi tiết từng buổi:
+          </h4>
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {bookings.map((booking, idx) => {
               const config = STATUS_CONFIG[booking.status];
@@ -204,32 +272,44 @@ export const RecurringBookingCard: React.FC<RecurringBookingCardProps> = ({
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">Buổi {idx + 1}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${config.bg} ${config.text} border ${config.border}`}>
+                      <span className="font-medium text-gray-900">
+                        Buổi {idx + 1}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${config.bg} ${config.text} border ${config.border}`}
+                      >
                         {config.label}
                       </span>
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      📅 {format(new Date(booking.startTime), 'EEEE, dd/MM/yyyy', { locale: vi })}
+                      📅{' '}
+                      {format(new Date(booking.startTime), 'EEEE, dd/MM/yyyy', {
+                        locale: vi,
+                      })}
                     </div>
                     <div className="text-sm text-gray-600">
-                      ⏰ {format(new Date(booking.startTime), 'HH:mm')} - {format(new Date(booking.endTime), 'HH:mm')}
+                      ⏰ {format(new Date(booking.startTime), 'HH:mm')} -{' '}
+                      {format(new Date(booking.endTime), 'HH:mm')}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      Mã: <code className="bg-gray-100 px-1 py-0.5 rounded">{booking.bookingCode}</code>
+                      Mã:{' '}
+                      <code className="bg-gray-100 px-1 py-0.5 rounded">
+                        {booking.bookingCode}
+                      </code>
                     </div>
                   </div>
 
-                  {booking.status === 'PENDING_PAYMENT' && booking.expiresAt && (
-                    <div className="text-right">
-                      <div className="text-xs text-orange-600 font-medium">
-                        Hết hạn sau:
+                  {booking.status === 'PENDING_PAYMENT' &&
+                    booking.expiresAt && (
+                      <div className="text-right">
+                        <div className="text-xs text-orange-600 font-medium">
+                          Hết hạn sau:
+                        </div>
+                        <div className="text-lg font-bold text-orange-700">
+                          {format(new Date(booking.expiresAt), 'HH:mm:ss')}
+                        </div>
                       </div>
-                      <div className="text-lg font-bold text-orange-700">
-                        {format(new Date(booking.expiresAt), 'HH:mm:ss')}
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               );
             })}

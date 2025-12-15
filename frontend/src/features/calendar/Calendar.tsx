@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { format, addDays } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { useCourts } from './hooks/useCourts';
 import { useAllCourtBookingsByDate } from './hooks/useCourtBookings';
-import { usePollBookings } from './hooks/usePollBookings';
-import TimelineResourceGrid, { TimelineBooking } from './components/TimelineResourceGrid';
-import { useMutation } from '@tanstack/react-query';
+import TimelineResourceGrid, {
+  TimelineBooking,
+} from './components/TimelineResourceGrid';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api/client';
 import './components/TimelineResourceGrid.css';
 
@@ -19,6 +21,8 @@ type SelectedSlot = {
 
 export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // NEW: Array-based state for cross-court selection
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
@@ -26,23 +30,28 @@ export const Calendar: React.FC = () => {
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
   const { data: courts, isLoading: courtsLoading } = useCourts();
-  const { data: bookings = [], isLoading: bookingsLoading } = useAllCourtBookingsByDate(dateStr);
+  const { data: bookings = [], isLoading: bookingsLoading } =
+    useAllCourtBookingsByDate(dateStr);
 
-  // Polling real-time bookings mỗi 5 giây
-  usePollBookings(dateStr, 5000);
+  // Real-time updates via Socket.IO (handled in useAllCourtBookingsByDate)
 
   // NEW: Merge consecutive slots into single bookings
-  const mergeConsecutiveSlots = (slots: SelectedSlot[]): Array<{
+  const mergeConsecutiveSlots = (
+    slots: SelectedSlot[],
+  ): Array<{
     courtId: number;
     startTime: string;
     endTime: string;
   }> => {
     // Group slots by court
-    const courtGroups = slots.reduce((acc, slot) => {
-      if (!acc[slot.courtId]) acc[slot.courtId] = [];
-      acc[slot.courtId].push(slot);
-      return acc;
-    }, {} as Record<number, SelectedSlot[]>);
+    const courtGroups = slots.reduce(
+      (acc, slot) => {
+        if (!acc[slot.courtId]) acc[slot.courtId] = [];
+        acc[slot.courtId].push(slot);
+        return acc;
+      },
+      {} as Record<number, SelectedSlot[]>,
+    );
 
     const mergedBookings: Array<{
       courtId: number;
@@ -54,7 +63,7 @@ export const Calendar: React.FC = () => {
     Object.values(courtGroups).forEach((courtSlots) => {
       // Sort slots by start time
       const sorted = [...courtSlots].sort(
-        (a, b) => a.startTime.getTime() - b.startTime.getTime()
+        (a, b) => a.startTime.getTime() - b.startTime.getTime(),
       );
 
       let currentGroup: SelectedSlot[] = [sorted[0]];
@@ -71,7 +80,8 @@ export const Calendar: React.FC = () => {
           mergedBookings.push({
             courtId: currentGroup[0].courtId,
             startTime: currentGroup[0].startTime.toISOString(),
-            endTime: currentGroup[currentGroup.length - 1].endTime.toISOString(),
+            endTime:
+              currentGroup[currentGroup.length - 1].endTime.toISOString(),
           });
           currentGroup = [curr];
         }
@@ -102,19 +112,27 @@ export const Calendar: React.FC = () => {
       });
     },
     onSuccess: (response) => {
-      const bookingCodes = response.data.bookings?.map((b: any) => b.bookingCode).join(', ') || '';
+      const bookingCodes =
+        response.data.bookings?.map((b: any) => b.bookingCode).join(', ') || '';
       const count = response.data.bookings?.length || 0;
-      const message = `✅ Đặt sân thành công!\n${count} booking được tạo\nMã đặt: ${bookingCodes}\n\n⏱️ Vui lòng thanh toán trong vòng 15 phút để giữ slot!`;
+      
+      // Clear selections
+      setSelectedSlots([]);
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['all-court-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      
+      // Show success message and navigate
+      const message = `✅ Đặt sân thành công!\n${count} booking được tạo\nMã đặt: ${bookingCodes}\n\n⏱️ Vui lòng thanh toán trong vòng 15 phút!`;
       alert(message);
       
-      // Redirect to My Bookings after 2 seconds
+      // Navigate without page reload (keeps socket alive)
       setTimeout(() => {
         if (confirm('Chuyển đến trang "Lịch của tôi" để thanh toán?')) {
-          window.location.href = '/my-bookings';
+          navigate('/my-bookings');
         }
       }, 500);
-      
-      setSelectedSlots([]);
     },
     onError: (error: any) => {
       console.error('❌ Booking error:', error);
@@ -132,11 +150,14 @@ export const Calendar: React.FC = () => {
     if (selectedSlots.length === 0) return null;
 
     const slotCount = selectedSlots.length;
-    const courtGroups = selectedSlots.reduce((acc, slot) => {
-      if (!acc[slot.courtId]) acc[slot.courtId] = [];
-      acc[slot.courtId].push(slot);
-      return acc;
-    }, {} as Record<number, SelectedSlot[]>);
+    const courtGroups = selectedSlots.reduce(
+      (acc, slot) => {
+        if (!acc[slot.courtId]) acc[slot.courtId] = [];
+        acc[slot.courtId].push(slot);
+        return acc;
+      },
+      {} as Record<number, SelectedSlot[]>,
+    );
 
     return {
       slotCount,
@@ -179,12 +200,15 @@ export const Calendar: React.FC = () => {
     // Check if slot is already selected (TOGGLE logic)
     const slotKey = `${courtId}-${startTime.getTime()}`;
     const existingIndex = selectedSlots.findIndex(
-      (s) => s.courtId === courtId && s.startTime.getTime() === startTime.getTime()
+      (s) =>
+        s.courtId === courtId && s.startTime.getTime() === startTime.getTime(),
     );
 
     if (existingIndex >= 0) {
       // REMOVE: Unselect this slot
-      setSelectedSlots((prev) => prev.filter((_, idx) => idx !== existingIndex));
+      setSelectedSlots((prev) =>
+        prev.filter((_, idx) => idx !== existingIndex),
+      );
       return;
     }
 
@@ -249,13 +273,18 @@ export const Calendar: React.FC = () => {
               <button
                 key={day}
                 onClick={() => setSelectedDate(addDays(new Date(), day))}
-                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${format(selectedDate, 'yyyy-MM-dd') ===
+                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${
+                  format(selectedDate, 'yyyy-MM-dd') ===
                   format(addDays(new Date(), day), 'yyyy-MM-dd')
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                  }`}
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                }`}
               >
-                {day === 0 ? 'Hôm nay' : day === 1 ? 'Ngày mai' : 'T' + (2 + day)}
+                {day === 0
+                  ? 'Hôm nay'
+                  : day === 1
+                    ? 'Ngày mai'
+                    : 'T' + (2 + day)}
               </button>
             ))}
           </div>
@@ -319,7 +348,9 @@ export const Calendar: React.FC = () => {
                     }).format(totalPrice)}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {selectedSummary.slotCount} slot{selectedSummary.slotCount > 1 ? 's' : ''} • {selectedSummary.courtCount} sân
+                    {selectedSummary.slotCount} slot
+                    {selectedSummary.slotCount > 1 ? 's' : ''} •{' '}
+                    {selectedSummary.courtCount} sân
                   </div>
                 </div>
 
@@ -346,7 +377,8 @@ export const Calendar: React.FC = () => {
             <div className="text-center text-gray-500">
               <span className="text-2xl mb-2 block">👆</span>
               <p className="text-sm">
-                Click vào các ô trống để chọn slot. Bạn có thể chọn nhiều slot trên nhiều sân khác nhau!
+                Click vào các ô trống để chọn slot. Bạn có thể chọn nhiều slot
+                trên nhiều sân khác nhau!
               </p>
             </div>
           </div>
@@ -354,7 +386,9 @@ export const Calendar: React.FC = () => {
 
         {/* Info Section */}
         <div className="mt-8 bg-blue-50 rounded-lg p-6 border border-blue-200">
-          <h3 className="text-lg font-bold text-blue-900 mb-4">ℹ️ Hướng dẫn sử dụng</h3>
+          <h3 className="text-lg font-bold text-blue-900 mb-4">
+            ℹ️ Hướng dẫn sử dụng
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
             <div>
               <p className="font-semibold mb-2">🎯 Đặt sân Bulk (mới!):</p>

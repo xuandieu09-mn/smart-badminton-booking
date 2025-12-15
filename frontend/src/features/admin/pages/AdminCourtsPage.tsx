@@ -14,7 +14,9 @@ export const AdminCourtsPage: React.FC = () => {
         <div className="flex items-start gap-3">
           <div className="text-3xl">🏟️</div>
           <div>
-            <h3 className="font-semibold text-green-900 mb-2">Tính năng đang phát triển</h3>
+            <h3 className="font-semibold text-green-900 mb-2">
+              Tính năng đang phát triển
+            </h3>
             <p className="text-green-800 text-sm mb-3">
               Trang này sẽ hiển thị:
             </p>
@@ -34,7 +36,9 @@ export const AdminCourtsPage: React.FC = () => {
 
       {/* Quick Preview */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">🎯 Preview: Court Management</h3>
+        <h3 className="font-semibold text-gray-800 mb-4">
+          🎯 Preview: Court Management
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
             <div className="text-2xl mb-2">🏸</div>

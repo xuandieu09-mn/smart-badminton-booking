@@ -89,6 +89,72 @@ export class WalletService {
   }
 
   /**
+   * 💰 Self top-up (Customer adds money to their own wallet - simulation)
+   */
+  async topup(userId: number, amount: number) {
+    if (amount <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
+    // Maximum top-up limit per transaction (for simulation safety)
+    if (amount > 10000000) {
+      throw new BadRequestException('Maximum top-up amount is 10,000,000 VND');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Get current wallet
+      const currentWallet = await tx.wallet.findUnique({
+        where: { userId },
+      });
+
+      if (!currentWallet) {
+        throw new NotFoundException('Wallet not found');
+      }
+
+      const balanceBefore = Number(currentWallet.balance);
+
+      // Update wallet balance
+      const wallet = await tx.wallet.update({
+        where: { userId },
+        data: {
+          balance: {
+            increment: amount,
+          },
+        },
+      });
+
+      const balanceAfter = Number(wallet.balance);
+
+      // Create transaction record
+      const transaction = await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'DEPOSIT',
+          amount,
+          balanceBefore,
+          balanceAfter,
+          description: 'Self top-up (simulated payment)',
+        },
+      });
+
+      return {
+        message: 'Top-up successful! 💰',
+        wallet: {
+          balance: balanceAfter,
+        },
+        transaction: {
+          id: transaction.id,
+          type: transaction.type,
+          amount: Number(transaction.amount),
+          balanceBefore: Number(transaction.balanceBefore),
+          balanceAfter: Number(transaction.balanceAfter),
+          createdAt: transaction.createdAt,
+        },
+      };
+    });
+  }
+
+  /**
    * 💸 Pay with wallet
    */
   async payWithWallet(userId: number, bookingId: number) {

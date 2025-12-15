@@ -1,7 +1,9 @@
 import {
   Controller,
   Get,
+  Put,
   Param,
+  Body,
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -12,6 +14,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import * as UserInterface from '../../common/interfaces/user.interface';
 import { Role } from '@prisma/client';
+import { UpdateProfileDto } from './dto';
 
 type JwtUser = UserInterface.JwtUser;
 
@@ -22,11 +25,21 @@ export class UsersController {
 
   // ✅ 1. Own profile (all authenticated users)
   @Get('profile')
-  getProfile(@CurrentUser() user: JwtUser) {
+  async getProfile(@CurrentUser() user: JwtUser) {
+    const fullProfile = await this.usersService.getUserById(user.id);
     return {
       message: 'Your profile',
-      user,
+      user: fullProfile,
     };
+  }
+
+  // ✅ 1.1 Update own profile (email, name)
+  @Put('profile')
+  async updateProfile(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.usersService.updateProfile(user.id, dto);
   }
 
   // ✅ 2. Dashboard (Staff/Admin) - PHẢI ĐẶT TRƯỚC :id

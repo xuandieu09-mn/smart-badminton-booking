@@ -72,7 +72,9 @@ export class VNPayService {
 
     console.log('🔍 VNPay Config:', {
       tmnCode: this.tmnCode,
-      secretKey: this.secretKey ? `${this.secretKey.substring(0, 10)}...` : 'NOT SET',
+      secretKey: this.secretKey
+        ? `${this.secretKey.substring(0, 10)}...`
+        : 'NOT SET',
       returnUrl: this.returnUrl,
       vnpUrl: this.vnpUrl,
     });

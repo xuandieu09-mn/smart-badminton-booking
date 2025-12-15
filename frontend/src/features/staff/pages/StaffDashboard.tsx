@@ -33,7 +33,9 @@ interface Booking {
 
 export const StaffDashboard: React.FC = () => {
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'overview' | 'bookings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'bookings'>(
+    'overview',
+  );
   const token = localStorage.getItem('token');
 
   // Fetch dashboard stats
@@ -90,9 +92,14 @@ export const StaffDashboard: React.FC = () => {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Staff Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+          Staff Dashboard
+        </h1>
         <p className="text-gray-600">
-          Chào mừng, <span className="font-semibold">{user?.fullName || user?.name || user?.email}</span>
+          Chào mừng,{' '}
+          <span className="font-semibold">
+            {user?.fullName || user?.name || user?.email}
+          </span>
         </p>
       </div>
 
@@ -102,7 +109,9 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-500 text-sm mb-1">Booking hôm nay</p>
-              <p className="text-3xl font-bold text-gray-800">{stats?.todayBookings || 0}</p>
+              <p className="text-3xl font-bold text-gray-800">
+                {stats?.todayBookings || 0}
+              </p>
             </div>
             <div className="bg-blue-500 w-12 h-12 rounded-lg flex items-center justify-center text-2xl">
               📅
@@ -114,7 +123,9 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-500 text-sm mb-1">Tổng booking</p>
-              <p className="text-3xl font-bold text-gray-800">{stats?.totalBookings || 0}</p>
+              <p className="text-3xl font-bold text-gray-800">
+                {stats?.totalBookings || 0}
+              </p>
             </div>
             <div className="bg-green-500 w-12 h-12 rounded-lg flex items-center justify-center text-2xl">
               📊
@@ -126,7 +137,9 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-500 text-sm mb-1">Chờ thanh toán</p>
-              <p className="text-3xl font-bold text-gray-800">{stats?.pendingPayments || 0}</p>
+              <p className="text-3xl font-bold text-gray-800">
+                {stats?.pendingPayments || 0}
+              </p>
             </div>
             <div className="bg-yellow-500 w-12 h-12 rounded-lg flex items-center justify-center text-2xl">
               ⏰
@@ -138,7 +151,9 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-500 text-sm mb-1">Công suất</p>
-              <p className="text-3xl font-bold text-gray-800">{stats?.occupancyRate || 0}%</p>
+              <p className="text-3xl font-bold text-gray-800">
+                {stats?.occupancyRate || 0}%
+              </p>
             </div>
             <div className="bg-purple-500 w-12 h-12 rounded-lg flex items-center justify-center text-2xl">
               📈
@@ -179,18 +194,28 @@ export const StaffDashboard: React.FC = () => {
             <div className="space-y-6">
               {/* Quick Actions */}
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Thao tác nhanh</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-4">
+                  Thao tác nhanh
+                </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors">
                     <div className="text-3xl mb-2">✅</div>
-                    <h3 className="font-semibold text-gray-800">Check-in khách</h3>
-                    <p className="text-sm text-gray-500">Quét QR code booking</p>
+                    <h3 className="font-semibold text-gray-800">
+                      Check-in khách
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Quét QR code booking
+                    </p>
                   </button>
 
                   <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors">
                     <div className="text-3xl mb-2">🏟️</div>
-                    <h3 className="font-semibold text-gray-800">Trạng thái sân</h3>
-                    <p className="text-sm text-gray-500">Xem sân đang hoạt động</p>
+                    <h3 className="font-semibold text-gray-800">
+                      Trạng thái sân
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Xem sân đang hoạt động
+                    </p>
                   </button>
 
                   <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors">
@@ -204,7 +229,10 @@ export const StaffDashboard: React.FC = () => {
               {/* Notice */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-blue-800">
-                  <span className="font-semibold">💡 Gợi ý:</span> Nhân viên có thể xem danh sách booking, check-in khách hàng, và quản lý POS. Các tính năng nâng cao sẽ được triển khai trong Day 14-18.
+                  <span className="font-semibold">💡 Gợi ý:</span> Nhân viên có
+                  thể xem danh sách booking, check-in khách hàng, và quản lý
+                  POS. Các tính năng nâng cao sẽ được triển khai trong Day
+                  14-18.
                 </p>
               </div>
             </div>
@@ -212,7 +240,9 @@ export const StaffDashboard: React.FC = () => {
 
           {activeTab === 'bookings' && (
             <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Danh sách booking</h2>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">
+                Danh sách booking
+              </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -241,7 +271,9 @@ export const StaffDashboard: React.FC = () => {
                           {booking.bookingCode}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {booking.user?.fullName || booking.user?.email || 'N/A'}
+                          {booking.user?.fullName ||
+                            booking.user?.email ||
+                            'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(booking.startTime).toLocaleString('vi-VN')}
@@ -250,7 +282,9 @@ export const StaffDashboard: React.FC = () => {
                           {booking.totalPrice.toLocaleString('vi-VN')} VND
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}
+                          >
                             {booking.status}
                           </span>
                         </td>

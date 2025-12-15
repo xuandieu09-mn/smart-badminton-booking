@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thanh toán thành công</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #2196F3;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      color: #2196F3;
+      margin: 0;
+      font-size: 28px;
+    }
+    .success-badge {
+      text-align: center;
+      font-size: 60px;
+      margin: 20px 0;
+    }
+    .booking-info {
+      background-color: #f9f9f9;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .booking-info h2 {
+      color: #2196F3;
+      margin-top: 0;
+      font-size: 20px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .label {
+      font-weight: bold;
+      color: #555;
+    }
+    .value {
+      color: #333;
+    }
+    .total-price {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2196F3;
+      text-align: center;
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #e3f2fd;
+      border-radius: 6px;
+    }
+    .qr-code {
+      text-align: center;
+      margin: 30px 0;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 8px;
+    }
+    .qr-code img {
+      max-width: 250px;
+      height: auto;
+      border: 2px solid #2196F3;
+      border-radius: 8px;
+      padding: 10px;
+      background-color: white;
+    }
+    .qr-code p {
+      margin-top: 15px;
+      color: #666;
+      font-size: 14px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e0e0e0;
+      color: #777;
+      font-size: 14px;
+    }
+    .booking-code {
+      font-size: 20px;
+      font-weight: bold;
+      color: #2196F3;
+      text-align: center;
+      padding: 10px;
+      background-color: #e3f2fd;
+      border-radius: 5px;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💳 Thanh toán thành công!</h1>
+    </div>
+
+    <div class="success-badge">✅</div>
+
+    <p>Xin chào <strong>{{customerName}}</strong>,</p>
+    
+    <p>Thanh toán của bạn đã được xác nhận thành công. Booking của bạn đã được kích hoạt!</p>
+
+    <div class="booking-code">
+      {{bookingCode}}
+    </div>
+
+    <div class="booking-info">
+      <h2>Chi tiết thanh toán</h2>
+      <div class="info-row">
+        <span class="label">Sân:</span>
+        <span class="value">{{courtName}}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Thời gian bắt đầu:</span>
+        <span class="value">{{startTime}}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Thời gian kết thúc:</span>
+        <span class="value">{{endTime}}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Phương thức thanh toán:</span>
+        <span class="value">{{paymentMethod}}</span>
+      </div>
+    </div>
+
+    <div class="total-price">
+      Đã thanh toán: {{totalPrice}} VND
+    </div>
+
+    {{#if qrCode}}
+    <div class="qr-code">
+      <h3 style="color: #2196F3;">Mã QR Check-in</h3>
+      <img src="{{qrCode}}" alt="QR Code">
+      <p><strong>Vui lòng lưu lại mã QR này và xuất trình khi check-in.</strong></p>
+      <p style="color: #ff9800; font-weight: bold;">⚠️ Đến trước giờ chơi 10 phút để check-in!</p>
+    </div>
+    {{/if}}
+
+    <div class="footer">
+      <p><strong>Lưu ý quan trọng:</strong></p>
+      <ul style="text-align: left; color: #555; padding-left: 40px;">
+        <li>Vui lòng đến sớm 10 phút để check-in</li>
+        <li>Mang theo giày thể thao và đồ chơi cầu lông</li>
+        <li>Xuất trình mã QR tại quầy lễ tân</li>
+      </ul>
+      <p style="margin-top: 20px;">Nếu có thắc mắc, liên hệ:</p>
+      <p>📧 Email: support@badminton.com</p>
+      <p>📱 Hotline: 0123-456-789</p>
+      <p style="margin-top: 20px; font-size: 12px; color: #999;">
+        Email này được gửi tự động, vui lòng không trả lời.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

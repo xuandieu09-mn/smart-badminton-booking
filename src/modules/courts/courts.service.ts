@@ -261,7 +261,7 @@ export class CourtsService {
     // Map courts with their bookings and status
     const courtStatuses = courts.map((court) => {
       const courtBookings = bookings.filter((b) => b.courtId === court.id);
-      
+
       // Find current booking (now is between start and end time)
       const currentBooking = courtBookings.find(
         (b) => new Date(b.startTime) <= now && new Date(b.endTime) > now,
@@ -275,7 +275,8 @@ export class CourtsService {
       // Determine status
       let status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED';
       if (currentBooking) {
-        status = currentBooking.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
+        status =
+          currentBooking.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
       } else {
         status = 'AVAILABLE';
       }

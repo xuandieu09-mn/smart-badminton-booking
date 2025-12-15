@@ -116,7 +116,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onError }) => {
       {/* Scanner Container */}
       <div className="relative bg-black rounded-lg overflow-hidden">
         <div id="qr-reader" className="w-full"></div>
-        
+
         {!isScanning && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
             <div className="text-center text-white">

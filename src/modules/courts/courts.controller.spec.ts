@@ -80,8 +80,18 @@ describe('CourtsController', () => {
       const mockAvailability = {
         date: '2025-12-10',
         slots: [
-          { time: '06:00-07:00', available: true, price: 50000, priceType: 'NORMAL' },
-          { time: '07:00-08:00', available: false, price: 50000, priceType: 'NORMAL' },
+          {
+            time: '06:00-07:00',
+            available: true,
+            price: 50000,
+            priceType: 'NORMAL',
+          },
+          {
+            time: '07:00-08:00',
+            available: false,
+            price: 50000,
+            priceType: 'NORMAL',
+          },
         ],
       };
 

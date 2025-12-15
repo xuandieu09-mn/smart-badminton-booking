@@ -148,7 +148,9 @@ describe('CourtsService', () => {
 
   describe('isAvailable', () => {
     it('should return true if court is available', async () => {
-      jest.spyOn(prismaService.booking, 'findFirst').mockResolvedValueOnce(null);
+      jest
+        .spyOn(prismaService.booking, 'findFirst')
+        .mockResolvedValueOnce(null);
 
       const result = await service.isAvailable(
         1,

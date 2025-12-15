@@ -162,7 +162,8 @@ export const CourtMonitor: React.FC = () => {
       {/* Refresh Button */}
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-600">
-          Cập nhật lúc: {data ? new Date(data.timestamp).toLocaleTimeString('vi-VN') : '--'}
+          Cập nhật lúc:{' '}
+          {data ? new Date(data.timestamp).toLocaleTimeString('vi-VN') : '--'}
         </div>
         <button
           onClick={() => refetch()}
@@ -180,7 +181,9 @@ export const CourtMonitor: React.FC = () => {
             className="bg-white rounded-lg shadow-md overflow-hidden border-2 hover:shadow-lg transition-shadow"
           >
             {/* Header */}
-            <div className={`px-4 py-3 ${getStatusColor(court.status)} border-b-2`}>
+            <div
+              className={`px-4 py-3 ${getStatusColor(court.status)} border-b-2`}
+            >
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg">{court.courtName}</h3>
                 <span className="text-2xl">{getStatusIcon(court.status)}</span>

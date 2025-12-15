@@ -13,7 +13,11 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    fullName: string,
+  ) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -23,7 +27,9 @@ const API = axios.create({
   timeout: 10000,
 });
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -31,7 +37,9 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem('token'),
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -48,19 +56,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const register = useCallback(async (email: string, password: string, fullName: string) => {
-    setIsLoading(true);
-    try {
-      const response = await API.post('/auth/register', { email, password, fullName });
-      const { user: userData, access_token } = response.data;
-      setUser(userData);
-      setToken(access_token);
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const register = useCallback(
+    async (email: string, password: string, fullName: string) => {
+      setIsLoading(true);
+      try {
+        const response = await API.post('/auth/register', {
+          email,
+          password,
+          fullName,
+        });
+        const { user: userData, access_token } = response.data;
+        setUser(userData);
+        setToken(access_token);
+        localStorage.setItem('token', access_token);
+        localStorage.setItem('user', JSON.stringify(userData));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setUser(null);
@@ -72,7 +87,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
-        user: user || (JSON.parse(localStorage.getItem('user') || 'null') as User | null),
+        user:
+          user ||
+          (JSON.parse(localStorage.getItem('user') || 'null') as User | null),
         token,
         isLoading,
         login,

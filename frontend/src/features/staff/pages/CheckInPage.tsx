@@ -10,7 +10,9 @@ const API = axios.create({
 });
 
 export const CheckInPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'scanner' | 'monitor' | 'generator'>('generator');
+  const [activeTab, setActiveTab] = useState<
+    'scanner' | 'monitor' | 'generator'
+  >('generator');
   const [manualCode, setManualCode] = useState('');
   const [checkInResult, setCheckInResult] = useState<{
     success: boolean;
@@ -34,7 +36,7 @@ export const CheckInPage: React.FC = () => {
     try {
       // Fix: authStore lưu vào 'access_token' không phải 'token'
       const token = localStorage.getItem('access_token');
-      
+
       if (!token) {
         setCheckInResult({
           success: false,
@@ -43,7 +45,7 @@ export const CheckInPage: React.FC = () => {
         setIsProcessing(false);
         return;
       }
-      
+
       const response = await API.post(
         '/bookings/check-in',
         { bookingCode: bookingCode.trim() },
@@ -67,9 +69,7 @@ export const CheckInPage: React.FC = () => {
       }, 5000);
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        'Lỗi không xác định';
+        error.response?.data?.message || error.message || 'Lỗi không xác định';
 
       setCheckInResult({
         success: false,
@@ -254,9 +254,7 @@ export const CheckInPage: React.FC = () => {
                   <li>Khách hàng xuất trình QR code từ email hoặc app</li>
                   <li>Nhân viên quét QR code để xác nhận booking</li>
                   <li>Check-in được phép 15 phút trước giờ bắt đầu</li>
-                  <li>
-                    Chỉ booking có trạng thái CONFIRMED mới được check-in
-                  </li>
+                  <li>Chỉ booking có trạng thái CONFIRMED mới được check-in</li>
                 </ul>
               </div>
             </div>

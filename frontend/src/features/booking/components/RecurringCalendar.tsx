@@ -25,7 +25,15 @@ const PATTERN_LABELS: Record<RecurrencePattern, string> = {
 };
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-const WEEKDAY_FULL = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+const WEEKDAY_FULL = [
+  'Chủ nhật',
+  'Thứ 2',
+  'Thứ 3',
+  'Thứ 4',
+  'Thứ 5',
+  'Thứ 6',
+  'Thứ 7',
+];
 
 const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => i + 6); // 6-20h
 
@@ -85,13 +93,13 @@ export const RecurringCalendar: React.FC = () => {
   const toggleSlot = (hour: number) => {
     const key = `${hour}`;
     const newSlots = new Set(selectedSlots);
-    
+
     if (newSlots.has(key)) {
       newSlots.delete(key);
     } else {
       newSlots.add(key);
     }
-    
+
     setSelectedSlots(newSlots);
   };
 
@@ -99,8 +107,10 @@ export const RecurringCalendar: React.FC = () => {
   const getContinuousSlots = (): { start: number; end: number } | null => {
     if (selectedSlots.size === 0) return null;
 
-    const hours = Array.from(selectedSlots).map(s => parseInt(s)).sort((a, b) => a - b);
-    
+    const hours = Array.from(selectedSlots)
+      .map((s) => parseInt(s))
+      .sort((a, b) => a - b);
+
     // Check if continuous
     for (let i = 1; i < hours.length; i++) {
       if (hours[i] !== hours[i - 1] + 1) {
@@ -112,10 +122,13 @@ export const RecurringCalendar: React.FC = () => {
   };
 
   const continuousSlots = getContinuousSlots();
-  const duration = continuousSlots ? continuousSlots.end - continuousSlots.start : 0;
-  const totalPrice = selectedCourt && duration > 0 
-    ? selectedCourt.pricePerHour * duration * occurrences 
+  const duration = continuousSlots
+    ? continuousSlots.end - continuousSlots.start
     : 0;
+  const totalPrice =
+    selectedCourt && duration > 0
+      ? selectedCourt.pricePerHour * duration * occurrences
+      : 0;
 
   const handleSubmit = async () => {
     if (!selectedCourt || !continuousSlots) {
@@ -182,7 +195,8 @@ export const RecurringCalendar: React.FC = () => {
                 {new Intl.NumberFormat('vi-VN', {
                   style: 'currency',
                   currency: 'VND',
-                }).format(Number(court.pricePerHour))}/h
+                }).format(Number(court.pricePerHour))}
+                /h
               </div>
             </button>
           ))}
@@ -197,7 +211,9 @@ export const RecurringCalendar: React.FC = () => {
         <input
           type="date"
           value={format(selectedDate, 'yyyy-MM-dd')}
-          onChange={(e) => setSelectedDate(new Date(e.target.value + 'T00:00:00'))}
+          onChange={(e) =>
+            setSelectedDate(new Date(e.target.value + 'T00:00:00'))
+          }
           min={format(new Date(), 'yyyy-MM-dd')}
           className="w-full md:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
         />
@@ -211,7 +227,7 @@ export const RecurringCalendar: React.FC = () => {
         <label className="block text-sm font-semibold text-gray-700 mb-3">
           Chọn khung giờ (click để chọn liên tục):
         </label>
-        
+
         <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
           {TIME_SLOTS.map((hour) => {
             const isSelected = selectedSlots.has(`${hour}`);
@@ -234,7 +250,11 @@ export const RecurringCalendar: React.FC = () => {
         {continuousSlots && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-sm text-green-800">
-              ✅ Đã chọn: <strong>{continuousSlots.start}:00 - {continuousSlots.end}:00</strong> ({duration}h)
+              ✅ Đã chọn:{' '}
+              <strong>
+                {continuousSlots.start}:00 - {continuousSlots.end}:00
+              </strong>{' '}
+              ({duration}h)
             </p>
           </div>
         )}
@@ -255,19 +275,21 @@ export const RecurringCalendar: React.FC = () => {
             Tần suất:
           </label>
           <div className="space-y-2">
-            {(['WEEKLY', 'BIWEEKLY', 'MONTHLY'] as RecurrencePattern[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPattern(p)}
-                className={`w-full p-3 rounded-lg border-2 transition text-left font-medium ${
-                  pattern === p
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 hover:border-purple-300 text-gray-700'
-                }`}
-              >
-                {PATTERN_LABELS[p]}
-              </button>
-            ))}
+            {(['WEEKLY', 'BIWEEKLY', 'MONTHLY'] as RecurrencePattern[]).map(
+              (p) => (
+                <button
+                  key={p}
+                  onClick={() => setPattern(p)}
+                  className={`w-full p-3 rounded-lg border-2 transition text-left font-medium ${
+                    pattern === p
+                      ? 'border-purple-500 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 hover:border-purple-300 text-gray-700'
+                  }`}
+                >
+                  {PATTERN_LABELS[p]}
+                </button>
+              ),
+            )}
           </div>
         </div>
 
@@ -280,7 +302,9 @@ export const RecurringCalendar: React.FC = () => {
             min={1}
             max={52}
             value={occurrences}
-            onChange={(e) => setOccurrences(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={(e) =>
+              setOccurrences(Math.max(1, parseInt(e.target.value) || 1))
+            }
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-0 text-lg font-medium"
           />
           <p className="text-xs text-gray-500 mt-2">
@@ -294,8 +318,10 @@ export const RecurringCalendar: React.FC = () => {
       {/* Preview Calendar */}
       {continuousSlots && (
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg shadow-sm border-2 border-purple-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">📅 Xem trước lịch đặt</h3>
-          
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            📅 Xem trước lịch đặt
+          </h3>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {previewDates.map((date, idx) => (
               <div
@@ -328,7 +354,9 @@ export const RecurringCalendar: React.FC = () => {
                 </div>
               </div>
               <div className="text-right text-sm text-gray-600">
-                <div>{occurrences} buổi × {duration}h</div>
+                <div>
+                  {occurrences} buổi × {duration}h
+                </div>
                 <div>= {occurrences * duration}h total</div>
               </div>
             </div>
@@ -363,7 +391,9 @@ export const RecurringCalendar: React.FC = () => {
                 </h3>
               </div>
               <div className="text-green-800 space-y-2">
-                <p><strong>Tổng số buổi:</strong> {result.data.totalBookings}</p>
+                <p>
+                  <strong>Tổng số buổi:</strong> {result.data.totalBookings}
+                </p>
                 <p>
                   <strong>Tổng tiền:</strong>{' '}
                   {new Intl.NumberFormat('vi-VN', {
@@ -373,7 +403,8 @@ export const RecurringCalendar: React.FC = () => {
                 </p>
                 <div className="mt-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
                   <p className="text-yellow-900 font-medium">
-                    ⚠️ Vui lòng thanh toán trong vòng 15 phút để giữ lịch đặt sân
+                    ⚠️ Vui lòng thanh toán trong vòng 15 phút để giữ lịch đặt
+                    sân
                   </p>
                 </div>
               </div>
@@ -399,16 +430,22 @@ export const RecurringCalendar: React.FC = () => {
             <>
               <div className="flex items-center mb-4">
                 <span className="text-4xl mr-3">❌</span>
-                <h3 className="text-2xl font-bold text-red-900">Đặt lịch thất bại</h3>
+                <h3 className="text-2xl font-bold text-red-900">
+                  Đặt lịch thất bại
+                </h3>
               </div>
               <p className="text-red-800 mb-4">{result.message}</p>
               {result.conflicts && result.conflicts.length > 0 && (
                 <div className="mt-4 p-4 bg-white rounded-lg border border-red-300">
-                  <p className="font-semibold text-red-900 mb-2">Các thời gian bị trùng:</p>
+                  <p className="font-semibold text-red-900 mb-2">
+                    Các thời gian bị trùng:
+                  </p>
                   <ul className="list-disc list-inside space-y-1 text-sm text-red-800">
                     {result.conflicts.map((conflict: string, idx: number) => (
                       <li key={idx}>
-                        {format(new Date(conflict), 'EEEE, dd/MM/yyyy HH:mm', { locale: vi })}
+                        {format(new Date(conflict), 'EEEE, dd/MM/yyyy HH:mm', {
+                          locale: vi,
+                        })}
                       </li>
                     ))}
                   </ul>

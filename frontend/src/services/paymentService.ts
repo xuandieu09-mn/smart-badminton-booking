@@ -29,9 +29,11 @@ export interface CreatePaymentUrlResponse {
 /**
  * Pay with wallet
  */
-export async function payWithWallet(bookingId: number): Promise<PaymentResponse> {
+export async function payWithWallet(
+  bookingId: number,
+): Promise<PaymentResponse> {
   const response = await apiClient.post<PaymentResponse>(
-    `/payments/pay/${bookingId}`
+    `/payments/pay/${bookingId}`,
   );
   return response.data;
 }
@@ -41,7 +43,7 @@ export async function payWithWallet(bookingId: number): Promise<PaymentResponse>
  */
 export async function createVNPayPaymentUrl(
   bookingId: number,
-  returnUrl?: string
+  returnUrl?: string,
 ): Promise<CreatePaymentUrlResponse> {
   const response = await apiClient.post<CreatePaymentUrlResponse>(
     '/payments/vnpay/create-url',
@@ -49,7 +51,7 @@ export async function createVNPayPaymentUrl(
       bookingId,
       gateway: 'VNPAY' as PaymentGateway,
       returnUrl,
-    }
+    },
   );
   return response.data;
 }
@@ -65,9 +67,13 @@ export async function getPaymentById(paymentId: number): Promise<Payment> {
 /**
  * Get payment by booking ID
  */
-export async function getPaymentByBookingId(bookingId: number): Promise<Payment | null> {
+export async function getPaymentByBookingId(
+  bookingId: number,
+): Promise<Payment | null> {
   try {
-    const response = await apiClient.get<Payment>(`/payments/booking/${bookingId}`);
+    const response = await apiClient.get<Payment>(
+      `/payments/booking/${bookingId}`,
+    );
     return response.data;
   } catch (error) {
     return null;
@@ -88,7 +94,7 @@ export async function getUserPayments(): Promise<Payment[]> {
 export async function processPayment(
   bookingId: number,
   gateway: PaymentGateway,
-  returnUrl?: string
+  returnUrl?: string,
 ): Promise<PaymentResponse | CreatePaymentUrlResponse> {
   if (gateway === 'WALLET') {
     return payWithWallet(bookingId);

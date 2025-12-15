@@ -19,7 +19,8 @@ export default function PaymentMethodModal({
   bookingAmount,
   isProcessing = false,
 }: PaymentMethodModalProps) {
-  const [selectedMethod, setSelectedMethod] = useState<PaymentGateway>('WALLET');
+  const [selectedMethod, setSelectedMethod] =
+    useState<PaymentGateway>('WALLET');
   const hasEnoughBalance = walletBalance >= bookingAmount;
 
   if (!isOpen) return null;

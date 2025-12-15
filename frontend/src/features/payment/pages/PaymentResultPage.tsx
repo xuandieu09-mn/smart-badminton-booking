@@ -22,7 +22,9 @@ export default function PaymentResultPage() {
 
   // Parse query params
   const success = searchParams.get('success') === 'true';
-  const bookingId = searchParams.get('bookingId') ? parseInt(searchParams.get('bookingId')!) : null;
+  const bookingId = searchParams.get('bookingId')
+    ? parseInt(searchParams.get('bookingId')!)
+    : null;
   const message = searchParams.get('message') || '';
 
   useEffect(() => {

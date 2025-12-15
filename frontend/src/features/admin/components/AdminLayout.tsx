@@ -41,7 +41,9 @@ const AdminLayout: React.FC = () => {
         <div className="p-6 border-b border-indigo-800">
           <div className="flex items-center space-x-3">
             <div className="text-2xl">🏸</div>
-            {sidebarOpen && <span className="font-bold text-lg">SmartBooking</span>}
+            {sidebarOpen && (
+              <span className="font-bold text-lg">SmartBooking</span>
+            )}
           </div>
         </div>
 
@@ -58,7 +60,9 @@ const AdminLayout: React.FC = () => {
               }`}
             >
               <span className="text-xl">{item.icon}</span>
-              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+              {sidebarOpen && (
+                <span className="text-sm font-medium">{item.label}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -71,7 +75,9 @@ const AdminLayout: React.FC = () => {
             </div>
             {sidebarOpen && (
               <div className="text-sm">
-                <p className="font-medium">{user?.fullName || user?.name || 'Admin'}</p>
+                <p className="font-medium">
+                  {user?.fullName || user?.name || 'Admin'}
+                </p>
                 <p className="text-indigo-300 text-xs">Quản trị viên</p>
               </div>
             )}
@@ -105,8 +111,12 @@ const AdminLayout: React.FC = () => {
               <span className="text-xl">☰</span>
             </button>
             <div>
-              <h2 className="text-sm font-medium text-gray-600">Chào mừng bạn trở lại!</h2>
-              <p className="text-xs text-gray-500">{new Date().toLocaleDateString('vi-VN')}</p>
+              <h2 className="text-sm font-medium text-gray-600">
+                Chào mừng bạn trở lại!
+              </h2>
+              <p className="text-xs text-gray-500">
+                {new Date().toLocaleDateString('vi-VN')}
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-4">

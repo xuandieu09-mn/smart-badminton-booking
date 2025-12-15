@@ -98,7 +98,10 @@ const CourtManagement: React.FC = () => {
     setFormData({
       name: court.name,
       description: court.description,
-      pricePerHour: typeof court.pricePerHour === 'string' ? parseInt(court.pricePerHour) : court.pricePerHour,
+      pricePerHour:
+        typeof court.pricePerHour === 'string'
+          ? parseInt(court.pricePerHour)
+          : court.pricePerHour,
     });
     setShowForm(true);
   };
@@ -126,7 +129,9 @@ const CourtManagement: React.FC = () => {
       {/* Form */}
       {showForm && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-bold mb-4">{editingId ? 'Chỉnh sửa sân' : 'Thêm sân mới'}</h3>
+          <h3 className="text-lg font-bold mb-4">
+            {editingId ? 'Chỉnh sửa sân' : 'Thêm sân mới'}
+          </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -135,7 +140,9 @@ const CourtManagement: React.FC = () => {
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="VD: Sân A1"
               />
@@ -146,7 +153,9 @@ const CourtManagement: React.FC = () => {
               </label>
               <textarea
                 value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="Mô tả sân cầu lông"
                 rows={3}
@@ -159,7 +168,12 @@ const CourtManagement: React.FC = () => {
               <input
                 type="number"
                 value={formData.pricePerHour}
-                onChange={(e) => setFormData({ ...formData, pricePerHour: parseInt(e.target.value) })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    pricePerHour: parseInt(e.target.value),
+                  })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="100000"
                 min="0"
@@ -193,31 +207,50 @@ const CourtManagement: React.FC = () => {
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">#</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Tên sân</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Mô tả</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Giá / Giờ</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Trạng thái</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Hành động</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                #
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                Tên sân
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                Mô tả
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                Giá / Giờ
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                Trạng thái
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                Hành động
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {courts.map((court, index) => (
               <tr key={court.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-600">{index + 1}</td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{court.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{court.description || '—'}</td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                  {typeof court.pricePerHour === 'string' 
+                  {court.name}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">
+                  {court.description || '—'}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {typeof court.pricePerHour === 'string'
                     ? parseInt(court.pricePerHour).toLocaleString('vi-VN')
-                    : court.pricePerHour.toLocaleString('vi-VN')} VND
+                    : court.pricePerHour.toLocaleString('vi-VN')}{' '}
+                  VND
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    court.isActive
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      court.isActive
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
                     {court.isActive ? '✓ Hoạt động' : '✕ Tạm dừng'}
                   </span>
                 </td>

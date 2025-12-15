@@ -1,12 +1,12 @@
 export type Role = 'CUSTOMER' | 'STAFF' | 'ADMIN';
-export type BookingStatus = 
-  | 'PENDING_PAYMENT' 
-  | 'CONFIRMED' 
-  | 'CHECKED_IN' 
-  | 'COMPLETED' 
-  | 'CANCELLED' 
-  | 'CANCELLED_LATE' 
-  | 'EXPIRED' 
+export type BookingStatus =
+  | 'PENDING_PAYMENT'
+  | 'CONFIRMED'
+  | 'CHECKED_IN'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'CANCELLED_LATE'
+  | 'EXPIRED'
   | 'BLOCKED';
 
 export interface User {

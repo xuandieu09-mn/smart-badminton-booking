@@ -116,8 +116,12 @@ const PaymentAnalytics: React.FC = () => {
           >
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-gray-600 font-medium">{card.label}</p>
-                <p className={`text-xl font-bold mt-2 ${card.textColor}`}>{card.value}</p>
+                <p className="text-sm text-gray-600 font-medium">
+                  {card.label}
+                </p>
+                <p className={`text-xl font-bold mt-2 ${card.textColor}`}>
+                  {card.value}
+                </p>
               </div>
               <span className="text-2xl">{card.icon}</span>
             </div>
@@ -129,18 +133,34 @@ const PaymentAnalytics: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Status Breakdown */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Phân bổ trạng thái thanh toán</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            Phân bổ trạng thái thanh toán
+          </h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Đã thanh toán</span>
-                <span className="text-sm font-bold text-green-700">{stats.paymentCount.paid} ({stats.paymentCount.paid === 0 ? '0%' : ((stats.paymentCount.paid / payments.length) * 100).toFixed(1) + '%'})</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Đã thanh toán
+                </span>
+                <span className="text-sm font-bold text-green-700">
+                  {stats.paymentCount.paid} (
+                  {stats.paymentCount.paid === 0
+                    ? '0%'
+                    : (
+                        (stats.paymentCount.paid / payments.length) *
+                        100
+                      ).toFixed(1) + '%'}
+                  )
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-green-500 h-2 rounded-full transition-all"
                   style={{
-                    width: payments.length > 0 ? `${(stats.paymentCount.paid / payments.length) * 100}%` : '0%',
+                    width:
+                      payments.length > 0
+                        ? `${(stats.paymentCount.paid / payments.length) * 100}%`
+                        : '0%',
                   }}
                 ></div>
               </div>
@@ -148,14 +168,28 @@ const PaymentAnalytics: React.FC = () => {
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Chờ thanh toán</span>
-                <span className="text-sm font-bold text-yellow-700">{stats.paymentCount.pending} ({stats.paymentCount.pending === 0 ? '0%' : ((stats.paymentCount.pending / payments.length) * 100).toFixed(1) + '%'})</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Chờ thanh toán
+                </span>
+                <span className="text-sm font-bold text-yellow-700">
+                  {stats.paymentCount.pending} (
+                  {stats.paymentCount.pending === 0
+                    ? '0%'
+                    : (
+                        (stats.paymentCount.pending / payments.length) *
+                        100
+                      ).toFixed(1) + '%'}
+                  )
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-yellow-500 h-2 rounded-full transition-all"
                   style={{
-                    width: payments.length > 0 ? `${(stats.paymentCount.pending / payments.length) * 100}%` : '0%',
+                    width:
+                      payments.length > 0
+                        ? `${(stats.paymentCount.pending / payments.length) * 100}%`
+                        : '0%',
                   }}
                 ></div>
               </div>
@@ -163,14 +197,28 @@ const PaymentAnalytics: React.FC = () => {
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Hoàn tiền</span>
-                <span className="text-sm font-bold text-purple-700">{stats.paymentCount.refunded} ({stats.paymentCount.refunded === 0 ? '0%' : ((stats.paymentCount.refunded / payments.length) * 100).toFixed(1) + '%'})</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Hoàn tiền
+                </span>
+                <span className="text-sm font-bold text-purple-700">
+                  {stats.paymentCount.refunded} (
+                  {stats.paymentCount.refunded === 0
+                    ? '0%'
+                    : (
+                        (stats.paymentCount.refunded / payments.length) *
+                        100
+                      ).toFixed(1) + '%'}
+                  )
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-purple-500 h-2 rounded-full transition-all"
                   style={{
-                    width: payments.length > 0 ? `${(stats.paymentCount.refunded / payments.length) * 100}%` : '0%',
+                    width:
+                      payments.length > 0
+                        ? `${(stats.paymentCount.refunded / payments.length) * 100}%`
+                        : '0%',
                   }}
                 ></div>
               </div>
@@ -178,14 +226,28 @@ const PaymentAnalytics: React.FC = () => {
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Thất bại</span>
-                <span className="text-sm font-bold text-red-700">{stats.paymentCount.failed} ({stats.paymentCount.failed === 0 ? '0%' : ((stats.paymentCount.failed / payments.length) * 100).toFixed(1) + '%'})</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Thất bại
+                </span>
+                <span className="text-sm font-bold text-red-700">
+                  {stats.paymentCount.failed} (
+                  {stats.paymentCount.failed === 0
+                    ? '0%'
+                    : (
+                        (stats.paymentCount.failed / payments.length) *
+                        100
+                      ).toFixed(1) + '%'}
+                  )
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-red-500 h-2 rounded-full transition-all"
                   style={{
-                    width: payments.length > 0 ? `${(stats.paymentCount.failed / payments.length) * 100}%` : '0%',
+                    width:
+                      payments.length > 0
+                        ? `${(stats.paymentCount.failed / payments.length) * 100}%`
+                        : '0%',
                   }}
                 ></div>
               </div>
@@ -195,7 +257,9 @@ const PaymentAnalytics: React.FC = () => {
 
         {/* Summary Stats */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Thống kê tóm tắt</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">
+            Thống kê tóm tắt
+          </h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
               <span className="text-gray-700">Tổng thanh toán</span>
@@ -203,19 +267,27 @@ const PaymentAnalytics: React.FC = () => {
             </div>
             <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
               <span className="text-gray-700">Thành công</span>
-              <span className="font-bold text-green-700">{stats.paymentCount.paid}</span>
+              <span className="font-bold text-green-700">
+                {stats.paymentCount.paid}
+              </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
               <span className="text-gray-700">Chờ xử lý</span>
-              <span className="font-bold text-yellow-700">{stats.paymentCount.pending}</span>
+              <span className="font-bold text-yellow-700">
+                {stats.paymentCount.pending}
+              </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
               <span className="text-gray-700">Không thành công</span>
-              <span className="font-bold text-red-700">{stats.paymentCount.failed}</span>
+              <span className="font-bold text-red-700">
+                {stats.paymentCount.failed}
+              </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
               <span className="text-gray-700">Hoàn tiền</span>
-              <span className="font-bold text-purple-700">{stats.paymentCount.refunded}</span>
+              <span className="font-bold text-purple-700">
+                {stats.paymentCount.refunded}
+              </span>
             </div>
           </div>
         </div>
@@ -224,22 +296,34 @@ const PaymentAnalytics: React.FC = () => {
       {/* Recent Payments */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-bold text-gray-900">Thanh toán gần đây</h3>
+          <h3 className="text-lg font-bold text-gray-900">
+            Thanh toán gần đây
+          </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">#</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Số tiền</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Trạng thái</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Ngày</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  #
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Số tiền
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Ngày
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {payments.slice(0, 10).map((payment, index) => (
                 <tr key={payment.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-600">{index + 1}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {index + 1}
+                  </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
                     {payment.amount.toLocaleString('vi-VN')} VND
                   </td>
@@ -249,19 +333,19 @@ const PaymentAnalytics: React.FC = () => {
                         payment.status === 'PAID'
                           ? 'bg-green-100 text-green-800'
                           : payment.status === 'UNPAID'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : payment.status === 'REFUNDED'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-red-100 text-red-800'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : payment.status === 'REFUNDED'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-red-100 text-red-800'
                       }`}
                     >
                       {payment.status === 'PAID'
                         ? '✓ Đã thanh toán'
                         : payment.status === 'UNPAID'
-                        ? '⏳ Chờ thanh toán'
-                        : payment.status === 'REFUNDED'
-                        ? '↶ Hoàn tiền'
-                        : '✕ Thất bại'}
+                          ? '⏳ Chờ thanh toán'
+                          : payment.status === 'REFUNDED'
+                            ? '↶ Hoàn tiền'
+                            : '✕ Thất bại'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">

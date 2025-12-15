@@ -45,8 +45,9 @@ export class QRCodeService {
    * Validate QR code format (booking code format)
    */
   validateBookingCode(code: string): boolean {
-    // Booking code format: BOOK-YYYYMMDD-XXXX
-    const bookingCodeRegex = /^BOOK-\d{8}-[A-Z0-9]{4}$/;
+    // Booking code format: BK{YYMMDD}-{XXXX}
+    // Example: BK251215-CRWD
+    const bookingCodeRegex = /^BK\d{6}-[A-Z0-9]{4}$/;
     return bookingCodeRegex.test(code);
   }
 }

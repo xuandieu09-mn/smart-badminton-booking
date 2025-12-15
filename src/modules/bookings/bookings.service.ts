@@ -18,14 +18,21 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EventsGateway } from '../../common/websocket/events.gateway';
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.BOOKING_TIMEOUT)
     private bookingQueue: Queue<ExpireBookingJobData>,
+    private notificationsService: NotificationsService,
+    private eventsGateway: EventsGateway,
   ) {}
 
   /**
@@ -181,6 +188,17 @@ export class BookingsService {
       console.log(
         `⏰ Scheduled expiration job for booking #${booking.id} in ${Math.round(delay / 1000)}s`,
       );
+    }
+
+    // 9️⃣ Emit WebSocket event for booking created
+    if (finalUserId) {
+      this.eventsGateway.emitBookingStatusChange(finalUserId, {
+        bookingId: booking.id,
+        newStatus: booking.status,
+        message: `Booking created: ${booking.bookingCode}`,
+      });
+
+      this.eventsGateway.broadcastCourtStatusUpdate(booking.courtId, 'booked');
     }
 
     return {
@@ -715,25 +733,20 @@ export class BookingsService {
       );
     }
 
-    // Update status to CANCELLED
-    const updatedBooking = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: BookingStatus.CANCELLED,
-      },
-    });
+    // Calculate refund info BEFORE updating booking
+    let refundPercentage = 0;
+    let refundReason = '';
+    let refundAmount = new Decimal(0);
 
-    // If booking was CONFIRMED (already paid), process refund with time-based policy
+    // If booking was CONFIRMED (already paid), calculate refund with time-based policy
     if (booking.status === BookingStatus.CONFIRMED && booking.userId) {
       // Calculate hours until booking starts
       const now = new Date();
       const bookingStart = new Date(booking.startTime);
-      const hoursUntilBooking = (bookingStart.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const hoursUntilBooking =
+        (bookingStart.getTime() - now.getTime()) / (1000 * 60 * 60);
 
       // Determine refund percentage based on cancellation time
-      let refundPercentage = 0;
-      let refundReason = '';
-
       if (hoursUntilBooking > 24) {
         refundPercentage = 100;
         refundReason = 'Full refund (cancelled >24h before)';
@@ -745,69 +758,161 @@ export class BookingsService {
         refundReason = 'No refund (cancelled <12h before)';
       }
 
-      const refundAmount = new Decimal(
-        (Number(booking.totalPrice) * refundPercentage) / 100
+      refundAmount = new Decimal(
+        (Number(booking.totalPrice) * refundPercentage) / 100,
       );
+    }
 
-      // Process refund if amount > 0
-      if (refundPercentage > 0) {
-        await this.prisma.$transaction(async (tx) => {
-          // Find payment
-          const payment = await tx.payment.findFirst({
-            where: {
-              bookingId: booking.id,
-              status: PaymentStatus.PAID,
+    // Update status to CANCELLED & create cancellation record
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancellation: {
+          create: {
+            cancelledBy: userId || booking.userId || 0,
+            cancelledByRole: userId ? Role.CUSTOMER : Role.ADMIN,
+            reason: refundReason || 'No reason provided',
+            refundAmount: refundAmount,
+            refundMethod: refundPercentage > 0 ? 'WALLET' : 'NONE',
+          },
+        },
+      },
+      include: {
+        cancellation: true,
+      },
+    });
+
+    // Process refund if amount > 0
+    if (refundPercentage > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        // Find payment
+        const payment = await tx.payment.findFirst({
+          where: {
+            bookingId: booking.id,
+            status: PaymentStatus.PAID,
+          },
+        });
+
+        if (payment) {
+          // Get wallet before update
+          const walletBefore = await tx.wallet.findUnique({
+            where: { userId: booking.userId },
+          });
+
+          if (!walletBefore) {
+            throw new NotFoundException('Wallet not found');
+          }
+
+          // Refund to wallet
+          await tx.wallet.update({
+            where: { userId: booking.userId },
+            data: {
+              balance: {
+                increment: refundAmount,
+              },
             },
           });
 
-          if (payment) {
-            // Get wallet before update
-            const walletBefore = await tx.wallet.findUnique({
-              where: { userId: booking.userId! },
-            });
+          // Get updated wallet
+          const walletAfter = await tx.wallet.findUnique({
+            where: { userId: booking.userId },
+          });
 
-            if (!walletBefore) {
-              throw new NotFoundException('Wallet not found');
-            }
+          // Create refund transaction
+          await tx.walletTransaction.create({
+            data: {
+              walletId: walletBefore.id,
+              type: 'REFUND',
+              amount: refundAmount,
+              description: `${refundReason} - Booking ${booking.bookingCode}`,
+              bookingId: booking.id,
+              balanceBefore: walletBefore.balance,
+              balanceAfter: walletAfter.balance,
+            },
+          });
 
-            // Refund to wallet
-            await tx.wallet.update({
-              where: { userId: booking.userId! },
-              data: {
-                balance: {
-                  increment: refundAmount,
-                },
-              },
-            });
+          // Update payment status
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              status:
+                refundPercentage === 100
+                  ? PaymentStatus.REFUNDED
+                  : PaymentStatus.PAID,
+            },
+          });
+        }
+      });
+    }
 
-            // Get updated wallet
-            const walletAfter = await tx.wallet.findUnique({
-              where: { userId: booking.userId! },
-            });
+    // Send cancellation email
+    try {
+      if (booking.userId) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: booking.userId },
+        });
 
-            // Create refund transaction
-            await tx.walletTransaction.create({
-              data: {
-                walletId: walletBefore.id,
-                type: 'REFUND',
-                amount: refundAmount,
-                description: `${refundReason} - Booking ${booking.bookingCode}`,
-                bookingId: booking.id,
-                balanceBefore: walletBefore.balance,
-                balanceAfter: walletAfter!.balance,
-              },
-            });
+        if (user?.email) {
+          const court = await this.prisma.court.findUnique({
+            where: { id: booking.courtId },
+          });
 
-            // Update payment status
-            await tx.payment.update({
-              where: { id: payment.id },
-              data: {
-                status: refundPercentage === 100 ? PaymentStatus.REFUNDED : PaymentStatus.PAID,
-              },
-            });
-          }
+          await this.notificationsService.sendBookingCancellation(user.email, {
+            bookingId: booking.id,
+            customerName: user.name || user.email,
+            bookingCode: booking.bookingCode,
+            courtName: court?.name || `Court ${booking.courtId}`,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            totalPrice: Number(booking.totalPrice),
+            cancellationReason:
+              updatedBooking.cancellation?.reason || refundReason,
+            refundAmount: Number(
+              updatedBooking.cancellation?.refundAmount || 0,
+            ),
+          });
+          this.logger.log(
+            `Cancellation email queued for booking ${booking.bookingCode}`,
+          );
+        }
+      }
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to queue cancellation email: ${emailError.message}`,
+      );
+      // Don't fail the cancellation if email fails
+    }
+
+    // Emit WebSocket event for booking cancelled
+    if (booking.userId) {
+      this.eventsGateway.emitBookingStatusChange(booking.userId, {
+        bookingId: booking.id,
+        newStatus: BookingStatus.CANCELLED,
+        message: `Booking ${booking.bookingCode} cancelled`,
+      });
+
+      // Emit refund notification if there was a refund
+      if (refundPercentage > 0 && booking.userId) {
+        // Get updated wallet balance
+        const updatedWallet = await this.prisma.wallet.findUnique({
+          where: { userId: booking.userId },
+        });
+
+        this.eventsGateway.emitRefund(booking.userId, {
+          bookingId: booking.id,
+          refundAmount: Number(refundAmount),
+          refundPercentage,
+          newWalletBalance: updatedWallet
+            ? Number(updatedWallet.balance)
+            : null,
         });
       }
+
+      this.eventsGateway.broadcastCourtStatusUpdate(
+        booking.courtId,
+        'available',
+      );
     }
 
     return {

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Test</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            padding: 5px;
+            margin: 2px 0;
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+        }
+        .success { border-color: #28a745; }
+        .error { border-color: #dc3545; }
+        .info { border-color: #17a2b8; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Socket.IO Real-time Test</h1>
+    
+    <div>
+        <label>User ID: </label>
+        <input type="number" id="userId" value="1" />
+        <button onclick="connectSocket()">Connect</button>
+        <button onclick="disconnectSocket()">Disconnect</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <div>
+        <h3>Connection Status: <span id="status">Disconnected</span></h3>
+    </div>
+
+    <div>
+        <h3>Test Actions:</h3>
+        <button onclick="testBooking()">📅 Create Test Booking</button>
+        <button onclick="testPayment()">💰 Test Payment</button>
+        <button onclick="testCancel()">❌ Test Cancel</button>
+    </div>
+
+    <div class="log" id="logs">
+        <div class="log-entry info">Waiting for connection...</div>
+    </div>
+
+    <script>
+        let socket = null;
+        let userId = 1;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function updateStatus(status, color = 'black') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.style.color = color;
+        }
+
+        function connectSocket() {
+            userId = parseInt(document.getElementById('userId').value);
+            
+            if (socket?.connected) {
+                log('Already connected!', 'info');
+                return;
+            }
+
+            log(`Connecting to http://localhost:3000/events with userId=${userId}...`, 'info');
+
+            socket = io('http://localhost:3000/events', {
+                query: { userId: userId.toString() },
+                transports: ['websocket', 'polling'],
+            });
+
+            socket.on('connect', () => {
+                log('✅ Socket connected! Socket ID: ' + socket.id, 'success');
+                updateStatus('Connected', 'green');
+            });
+
+            socket.on('disconnect', () => {
+                log('❌ Socket disconnected', 'error');
+                updateStatus('Disconnected', 'red');
+            });
+
+            socket.on('connect_error', (error) => {
+                log('❌ Connection error: ' + error.message, 'error');
+                updateStatus('Connection Failed', 'red');
+            });
+
+            // Listen to booking events
+            socket.on('booking:status-changed', (payload) => {
+                log('📢 Booking Status Changed: ' + JSON.stringify(payload), 'success');
+            });
+
+            socket.on('booking:refund-received', (payload) => {
+                log('💰 Refund Received: ' + JSON.stringify(payload), 'success');
+            });
+
+            socket.on('notification', (notification) => {
+                log('🔔 Notification: ' + JSON.stringify(notification), 'info');
+            });
+
+            socket.on('court:status-update', (payload) => {
+                log('🎾 Court Update: ' + JSON.stringify(payload), 'info');
+            });
+        }
+
+        function disconnectSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                log('Disconnected manually', 'info');
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div class="log-entry info">Logs cleared</div>';
+        }
+
+        function testBooking() {
+            if (!socket?.connected) {
+                alert('Please connect first!');
+                return;
+            }
+            
+            log('Testing: Simulate booking creation via API...', 'info');
+            fetch('http://localhost:3000/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer YOUR_TOKEN_HERE'
+                },
+                body: JSON.stringify({
+                    courtId: 1,
+                    startTime: new Date(Date.now() + 86400000).toISOString(),
+                    endTime: new Date(Date.now() + 86400000 + 3600000).toISOString(),
+                    type: 'SINGLE'
+                })
+            })
+            .then(res => res.json())
+            .then(data => log('Booking created: ' + JSON.stringify(data), 'success'))
+            .catch(err => log('Error: ' + err.message, 'error'));
+        }
+
+        function testPayment() {
+            log('Testing: Payment event...', 'info');
+            log('Use the actual UI to test payment flow', 'info');
+        }
+
+        function testCancel() {
+            log('Testing: Cancel booking...', 'info');
+            log('Use the actual UI to test cancel flow', 'info');
+        }
+
+        // Auto-connect on load
+        window.onload = () => {
+            connectSocket();
+        };
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Payment, PaymentStatus } from '@prisma/client';
@@ -9,12 +10,18 @@ import { Decimal } from '@prisma/client/runtime/library';
 import * as QRCode from 'qrcode';
 import { VNPayService } from './gateways/vnpay.service';
 import { VNPayCallbackDto } from './dto/payment-gateway.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EventsGateway } from '../../common/websocket/events.gateway';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     private prisma: PrismaService,
     private vnpayService: VNPayService,
+    private notificationsService: NotificationsService,
+    private eventsGateway: EventsGateway,
   ) {}
 
   /**
@@ -191,6 +198,44 @@ export class PaymentsService {
     } catch (error) {
       console.error('QR code generation failed:', error);
       // Don't fail payment if QR generation fails
+    }
+
+    // Send payment success email
+    try {
+      if (booking.userId) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: booking.userId },
+        });
+
+        if (user?.email) {
+          await this.notificationsService.sendPaymentSuccess(user.email, {
+            bookingId: booking.id,
+            customerName: user.name || user.email,
+            bookingCode: booking.bookingCode,
+            courtName: `Court ${booking.courtId}`,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            totalPrice: Number(booking.totalPrice),
+            paymentMethod: 'WALLET',
+            qrCode: qrCode || undefined,
+          });
+          this.logger.log(
+            `Payment success email queued for booking ${booking.bookingCode}`,
+          );
+        }
+      }
+    } catch (emailError) {
+      this.logger.error(`Failed to queue payment email: ${emailError.message}`);
+      // Don't fail the payment if email fails
+    }
+
+    // Emit WebSocket event for payment success
+    if (booking.userId) {
+      this.eventsGateway.emitBookingStatusChange(booking.userId, {
+        bookingId: booking.id,
+        newStatus: 'CONFIRMED',
+        message: `Payment successful for booking ${booking.bookingCode}`,
+      });
     }
 
     return {
@@ -496,6 +541,43 @@ export class PaymentsService {
       });
     } catch (error) {
       console.error('QR code generation failed:', error);
+    }
+
+    // Send payment success email for VNPay
+    try {
+      if (booking.userId) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: booking.userId },
+        });
+
+        if (user?.email) {
+          await this.notificationsService.sendPaymentSuccess(user.email, {
+            bookingId: booking.id,
+            customerName: user.name || user.email,
+            bookingCode: booking.bookingCode,
+            courtName: `Court ${booking.courtId}`,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            totalPrice: Number(booking.totalPrice),
+            paymentMethod: 'VNPAY',
+            qrCode: qrCode || undefined,
+          });
+          this.logger.log(
+            `VNPay payment success email queued for booking ${booking.bookingCode}`,
+          );
+        }
+      }
+    } catch (emailError) {
+      this.logger.error(`Failed to queue VNPay email: ${emailError.message}`);
+    }
+
+    // Emit WebSocket event for VNPay payment success
+    if (booking.userId) {
+      this.eventsGateway.emitBookingStatusChange(booking.userId, {
+        bookingId: booking.id,
+        newStatus: 'CONFIRMED',
+        message: `VNPay payment successful for booking ${booking.bookingCode}`,
+      });
     }
 
     return {

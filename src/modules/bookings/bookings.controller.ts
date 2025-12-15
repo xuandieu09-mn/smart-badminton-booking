@@ -188,7 +188,7 @@ export class BookingsController {
       !this.qrcodeService.validateBookingCode(bookingCode)
     ) {
       throw new Error(
-        'Invalid booking code format. Expected: BOOK-YYYYMMDD-XXXX',
+        'Invalid booking code format. Expected: BK{YYMMDD}-{XXXX} (e.g., BK251215-CRWD)',
       );
     }
 

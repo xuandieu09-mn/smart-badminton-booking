@@ -68,7 +68,9 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
             <div>
               <p className="text-sm text-gray-600 font-medium">{card.label}</p>
               <p className={`text-2xl font-bold mt-2 ${card.textColor}`}>
-                {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
+                {typeof card.value === 'number'
+                  ? card.value.toLocaleString()
+                  : card.value}
               </p>
             </div>
             <span className="text-3xl">{card.icon}</span>

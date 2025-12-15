@@ -32,12 +32,16 @@ export const RegisterPage = () => {
       <h2 className="text-2xl font-bold text-center mb-6">Register</h2>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+          {error}
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Name
+          </label>
           <input
             type="text"
             value={name}
@@ -48,7 +52,9 @@ export const RegisterPage = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email
+          </label>
           <input
             type="email"
             value={email}
@@ -59,7 +65,9 @@ export const RegisterPage = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Password
+          </label>
           <input
             type="password"
             value={password}

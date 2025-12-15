@@ -3,7 +3,13 @@ import { useQueries } from '@tanstack/react-query';
 import { Court, CourtAvailabilitySlot } from '../../../types/court.types';
 import { courtApi } from '../../../services/api/court.api';
 
-type CellStatus = 'BOOKED' | 'PENDING' | 'AVAILABLE' | 'SELECTED' | 'PAST' | 'MAINTENANCE';
+type CellStatus =
+  | 'BOOKED'
+  | 'PENDING'
+  | 'AVAILABLE'
+  | 'SELECTED'
+  | 'PAST'
+  | 'MAINTENANCE';
 
 type BookingGridProps = {
   courts: Court[];
@@ -33,11 +39,14 @@ const timeSlotsForDay = (date: Date) => {
 
 const statusClasses: Record<CellStatus, string> = {
   BOOKED: 'bg-red-100 text-red-700 border border-red-200 cursor-not-allowed',
-  PENDING: 'bg-orange-200 text-orange-800 border border-orange-300 cursor-not-allowed',
-  AVAILABLE: 'bg-white text-gray-900 border border-gray-200 hover:bg-green-50 hover:border-green-200',
+  PENDING:
+    'bg-orange-200 text-orange-800 border border-orange-300 cursor-not-allowed',
+  AVAILABLE:
+    'bg-white text-gray-900 border border-gray-200 hover:bg-green-50 hover:border-green-200',
   SELECTED: 'bg-blue-600 text-white border border-blue-700',
   PAST: 'bg-gray-200 text-gray-500 border border-gray-300 cursor-not-allowed',
-  MAINTENANCE: 'bg-gray-300 text-gray-600 border border-gray-400 cursor-not-allowed',
+  MAINTENANCE:
+    'bg-gray-300 text-gray-600 border border-gray-400 cursor-not-allowed',
 };
 
 const Legend = () => (
@@ -58,8 +67,15 @@ const Legend = () => (
   </div>
 );
 
-export const BookingGrid: React.FC<BookingGridProps> = ({ courts, date, isLoadingCourts, onSelect }) => {
-  const [selectedCells, setSelectedCells] = useState<Record<string, boolean>>({});
+export const BookingGrid: React.FC<BookingGridProps> = ({
+  courts,
+  date,
+  isLoadingCourts,
+  onSelect,
+}) => {
+  const [selectedCells, setSelectedCells] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const dateStr = useMemo(() => date.toISOString().split('T')[0], [date]);
   const slotRows = useMemo(() => timeSlotsForDay(date), [date]);
@@ -109,7 +125,11 @@ export const BookingGrid: React.FC<BookingGridProps> = ({ courts, date, isLoadin
     return { status: 'AVAILABLE', slot };
   };
 
-  const handleSelect = (court: Court, slot: CourtAvailabilitySlot, slotLabel: string) => {
+  const handleSelect = (
+    court: Court,
+    slot: CourtAvailabilitySlot,
+    slotLabel: string,
+  ) => {
     const key = `${court.id}-${slotLabel}`;
     setSelectedCells((prev) => {
       const next = { ...prev };
@@ -127,7 +147,9 @@ export const BookingGrid: React.FC<BookingGridProps> = ({ courts, date, isLoadin
         <table className="min-w-full border-collapse">
           <thead>
             <tr>
-              <th className="sticky left-0 bg-gray-50 text-left text-xs font-semibold text-gray-600 px-2 py-2 border border-gray-200 w-24">Giờ</th>
+              <th className="sticky left-0 bg-gray-50 text-left text-xs font-semibold text-gray-600 px-2 py-2 border border-gray-200 w-24">
+                Giờ
+              </th>
               {courts?.map((court) => (
                 <th
                   key={court.id}
@@ -145,10 +167,15 @@ export const BookingGrid: React.FC<BookingGridProps> = ({ courts, date, isLoadin
                   {label}
                 </td>
                 {courts?.map((court) => {
-                  const { status, slot, tooltip } = computeStatus(court.id, label, slotDate);
+                  const { status, slot, tooltip } = computeStatus(
+                    court.id,
+                    label,
+                    slotDate,
+                  );
                   const classes = statusClasses[status];
                   const key = `${court.id}-${label}`;
-                  const clickable = status === 'AVAILABLE' || status === 'SELECTED';
+                  const clickable =
+                    status === 'AVAILABLE' || status === 'SELECTED';
 
                   return (
                     <td key={court.id} className="p-1 border border-gray-200">
@@ -160,13 +187,36 @@ export const BookingGrid: React.FC<BookingGridProps> = ({ courts, date, isLoadin
                           ${clickable ? 'focus:outline-none focus:ring-2 focus:ring-indigo-400' : ''}`}
                       >
                         <div className="flex flex-col items-center justify-center gap-1">
-                          <span>{slot?.price ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(slot.price) : '—'}</span>
-                          {status === 'BOOKED' && <span className="text-[11px]">Booked</span>}
-                          {status === 'PENDING' && <span className="text-[11px]">Pending</span>}
-                          {status === 'AVAILABLE' && <span className="text-[11px] text-green-700">Available</span>}
-                          {status === 'SELECTED' && <span className="text-[11px] text-white">Selected</span>}
-                          {status === 'PAST' && <span className="text-[11px]">Past</span>}
-                          {status === 'MAINTENANCE' && <span className="text-[11px]">NA</span>}
+                          <span>
+                            {slot?.price
+                              ? new Intl.NumberFormat('vi-VN', {
+                                  style: 'currency',
+                                  currency: 'VND',
+                                }).format(slot.price)
+                              : '—'}
+                          </span>
+                          {status === 'BOOKED' && (
+                            <span className="text-[11px]">Booked</span>
+                          )}
+                          {status === 'PENDING' && (
+                            <span className="text-[11px]">Pending</span>
+                          )}
+                          {status === 'AVAILABLE' && (
+                            <span className="text-[11px] text-green-700">
+                              Available
+                            </span>
+                          )}
+                          {status === 'SELECTED' && (
+                            <span className="text-[11px] text-white">
+                              Selected
+                            </span>
+                          )}
+                          {status === 'PAST' && (
+                            <span className="text-[11px]">Past</span>
+                          )}
+                          {status === 'MAINTENANCE' && (
+                            <span className="text-[11px]">NA</span>
+                          )}
                         </div>
                       </button>
                     </td>
