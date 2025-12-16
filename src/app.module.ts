@@ -12,6 +12,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { CourtsModule } from './modules/courts/courts.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CronModule } from './modules/cron/cron.module';
+import { PosModule } from './modules/pos/pos.module';
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     PrismaModule,
     QueueModule, // ✅ ensure Bull root config is loaded
     WebsocketModule, // ✅ WebSocket for real-time updates
+    CronModule, // ✅ Cron jobs for auto-completion
     AuthModule,
     UsersModule,
     BookingsModule,
@@ -28,6 +31,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     CourtsModule, // ✅ Courts CRUD
     PaymentsModule, // ✅ Payments CRUD
     NotificationsModule, // ✅ Email Notifications
+    PosModule, // ✅ POS System (Products & Sales)
   ],
   controllers: [AppController],
   providers: [AppService],

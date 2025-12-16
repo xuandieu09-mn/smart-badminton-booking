@@ -230,7 +230,7 @@ export class CourtsService {
       orderBy: { name: 'asc' },
     });
 
-    // Get all bookings for today
+    // Get all bookings for today (excluding COMPLETED, CANCELLED, EXPIRED)
     const bookings = await this.prisma.booking.findMany({
       where: {
         startTime: {
@@ -241,6 +241,7 @@ export class CourtsService {
         },
         status: {
           in: ['CONFIRMED', 'CHECKED_IN', 'PENDING_PAYMENT'],
+          // ✅ Exclude COMPLETED - when booking completes, court becomes available
         },
       },
       include: {

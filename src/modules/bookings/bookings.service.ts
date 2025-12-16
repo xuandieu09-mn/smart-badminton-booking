@@ -680,11 +680,12 @@ export class BookingsService {
       throw new BadRequestException('Booking time has expired.');
     }
 
-    // Update status to CHECKED_IN
+    // Update status to CHECKED_IN and set check-in timestamp
     const updatedBooking = await this.prisma.booking.update({
       where: { id: booking.id },
       data: {
         status: BookingStatus.CHECKED_IN,
+        checkedInAt: now, // ✅ Record check-in time
       },
       include: {
         court: true,
@@ -699,6 +700,79 @@ export class BookingsService {
     });
 
     return updatedBooking;
+  }
+
+  /**
+   * ✅ Finish booking (Manual completion by staff)
+   * Update status from CHECKED_IN to COMPLETED
+   */
+  async finishBooking(bookingId: number): Promise<{ message: string; booking: any }> {
+    // Get booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking #${bookingId} not found`);
+    }
+
+    // Check if booking is CHECKED_IN
+    if (booking.status !== BookingStatus.CHECKED_IN) {
+      throw new BadRequestException(
+        `Booking cannot be completed. Current status: ${booking.status}. Only CHECKED_IN bookings can be completed.`,
+      );
+    }
+
+    // Update status to COMPLETED
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.COMPLETED,
+      },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Emit WebSocket event for booking completed
+    if (booking.userId) {
+      this.eventsGateway.emitBookingStatusChange(booking.userId, {
+        bookingId: booking.id,
+        newStatus: BookingStatus.COMPLETED,
+        message: `Booking ${booking.bookingCode} completed`,
+      });
+
+      this.eventsGateway.broadcastCourtStatusUpdate(
+        booking.courtId,
+        'available',
+      );
+    }
+
+    this.logger.log(
+      `✅ Booking #${booking.id} (${booking.bookingCode}) manually completed by staff`,
+    );
+
+    return {
+      message: 'Booking completed successfully',
+      booking: updatedBooking,
+    };
   }
 
   /**

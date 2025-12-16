@@ -170,6 +170,23 @@ export class BookingsController {
   }
 
   /**
+   * 🏁 Finish booking (Manual completion by staff)
+   * Update booking status to COMPLETED (for early finish)
+   */
+  @Post(':id/finish')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async finishBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtUser,
+  ) {
+    const result = await this.bookingsService.finishBooking(id);
+    return {
+      ...result,
+      finishedBy: user.email,
+    };
+  }
+
+  /**
    * ✅ Check-in booking using QR code (Staff only)
    * Update booking status to CHECKED_IN
    */

@@ -73,6 +73,8 @@ model User {
   staffCheckedIns      Booking[] @relation("StaffCheckedIn")
   // Admin actions (audit log)
   adminActions         AdminAction[]
+  // Staff sales (POS)
+  staffSales           Sale[]        @relation("StaffSales")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -262,4 +264,69 @@ model AdminAction {
   metadata   Json? // Additional data
 
   createdAt DateTime @default(now())
+}
+
+// ==================== POS SYSTEM (Point of Sale) ====================
+
+enum ProductCategory {
+  SHUTTLECOCK
+  BEVERAGE
+  ACCESSORY
+  EQUIPMENT
+  OTHER
+}
+
+model Product {
+  id          Int             @id @default(autoincrement())
+  name        String
+  description String?
+  category    ProductCategory
+  price       Decimal
+  stock       Int             @default(0)
+  imageUrl    String?
+  isActive    Boolean         @default(true)
+
+  saleItems SaleItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model Sale {
+  id            Int      @id @default(autoincrement())
+  saleCode      String   @unique
+  totalAmount   Decimal
+  paymentMethod String   @default("CASH")
+  
+  staffId Int
+  staff   User @relation("StaffSales", fields: [staffId], references: [id])
+
+  customerId   Int?
+  customerName String?
+  
+  bookingId Int?
+
+  items SaleItem[]
+
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id        Int     @id @default(autoincrement())
+  saleId    Int
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  quantity  Int
+  unitPrice Decimal
+  subtotal  Decimal
+
+  @@index([saleId])
+  @@index([productId])
 }

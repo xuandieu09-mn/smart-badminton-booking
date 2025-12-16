@@ -20,6 +20,8 @@ import AdminReportsPage from '../features/admin/pages/AdminReportsPage';
 import StaffLayout from '../features/staff/layouts/StaffLayout';
 import StaffDashboard from '../features/staff/pages/StaffDashboard';
 import CheckInPage from '../features/staff/pages/CheckInPage';
+import StaffCourtsPage from '../features/staff/pages/StaffCourtsPage';
+import StaffPosPage from '../features/staff/pages/StaffPosPage';
 import { NotFound } from '../features/common/components/NotFound';
 import PaymentResultPage from '../features/payment/pages/PaymentResultPage';
 
@@ -101,21 +103,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'courts',
-        element: (
-          <div className="p-6">
-            <h1 className="text-2xl font-bold">Trạng thái sân</h1>
-            <p className="text-gray-600">Real-time court monitoring (Day 14)</p>
-          </div>
-        ),
+        element: <StaffCourtsPage />,
       },
       {
         path: 'pos',
-        element: (
-          <div className="p-6">
-            <h1 className="text-2xl font-bold">POS System</h1>
-            <p className="text-gray-600">Point of Sale (Day 18)</p>
-          </div>
-        ),
+        element: <StaffPosPage />,
       },
     ],
   },
