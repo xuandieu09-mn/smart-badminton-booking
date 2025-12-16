@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
 
 export class CreateCourtDto {
   @IsString()
@@ -11,4 +11,8 @@ export class CreateCourtDto {
   @IsNumber()
   @Min(0)
   pricePerHour: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

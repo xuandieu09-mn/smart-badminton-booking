@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSaleDto } from './dto/sale.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -26,7 +31,9 @@ export class SalesService {
         }
 
         if (!product.isActive) {
-          throw new BadRequestException(`Product "${product.name}" is not available`);
+          throw new BadRequestException(
+            `Product "${product.name}" is not available`,
+          );
         }
 
         if (product.stock < item.quantity) {

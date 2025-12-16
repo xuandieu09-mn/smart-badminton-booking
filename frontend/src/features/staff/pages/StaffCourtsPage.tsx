@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
 import { useCourts } from '../../calendar/hooks/useCourts';
 import { useAllCourtBookingsByDate } from '../../calendar/hooks/useCourtBookings';
@@ -29,7 +29,9 @@ const StaffCourtsPage: React.FC = () => {
     guestName: '',
     guestPhone: '',
   });
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'VNPAY'>('CASH');
   const [showGuestForm, setShowGuestForm] = useState(false);
+  const [staffInfo, setStaffInfo] = useState<{ name: string; phone: string } | null>(null);
   const queryClient = useQueryClient();
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -37,6 +39,28 @@ const StaffCourtsPage: React.FC = () => {
   const { data: courts, isLoading: courtsLoading } = useCourts();
   const { data: bookings = [], isLoading: bookingsLoading } =
     useAllCourtBookingsByDate(dateStr);
+
+  // Auto-fill staff info on mount
+  useEffect(() => {
+    const fetchStaffInfo = async () => {
+      try {
+        const { data } = await apiClient.get('/users/profile');
+        if (data.name) {
+          setStaffInfo({
+            name: data.name,
+            phone: data.phone || '',
+          });
+          setGuestInfo({
+            guestName: data.name,
+            guestPhone: data.phone || '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch staff info:', error);
+      }
+    };
+    fetchStaffInfo();
+  }, []);
 
   // Merge consecutive slots into single bookings
   const mergeConsecutiveSlots = (
@@ -66,7 +90,7 @@ const StaffCourtsPage: React.FC = () => {
       guestPhone: string;
       paymentMethod: string;
     }> = [];
-
+paymentMethod
     Object.values(courtGroups).forEach((courtSlots) => {
       const sorted = [...courtSlots].sort(
         (a, b) => a.startTime.getTime() - b.startTime.getTime(),
@@ -100,7 +124,7 @@ const StaffCourtsPage: React.FC = () => {
         endTime: currentGroup[currentGroup.length - 1].endTime.toISOString(),
         guestName: guestInfo.guestName,
         guestPhone: guestInfo.guestPhone,
-        paymentMethod: 'CASH',
+        paymentMethod: paymentMethod,
       });
     });
 
@@ -129,10 +153,11 @@ const StaffCourtsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['all-court-bookings'] });
 
       alert(
-        `✅ Đặt sân thành công cho khách vãng lai!\n` +
+        `✅ Đặt sân thành công!\n` +
           `${count} booking được tạo\n` +
           `Mã đặt: ${bookingCodes}\n` +
-          `Khách: ${guestInfo.guestName} (${guestInfo.guestPhone})`,
+          `Khách: ${guestInfo.guestName} (${guestInfo.guestPhone})\n` +
+          `Thanh toán: ${paymentMethod === 'CASH' ? '💵 Tiền mặt' : '💳 Chuyển khoản (VNPAY)'}`,
       );
     },
     onError: (error: any) => {
@@ -434,13 +459,39 @@ const StaffCourtsPage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="text-sm text-green-800">
-                    <span className="font-bold">Phương thức thanh toán:</span>{' '}
-                    💵 Tiền mặt
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Phương thức thanh toán <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('CASH')}
+                      className={`px-4 py-3 rounded-lg border-2 font-medium transition ${
+                        paymentMethod === 'CASH'
+                          ? 'border-green-500 bg-green-50 text-green-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      💵 Tiền mặt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('VNPAY')}
+                      className={`px-4 py-3 rounded-lg border-2 font-medium transition ${
+                        paymentMethod === 'VNPAY'
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      🏦 Chuyển khoản
+                    </button>
                   </div>
-                  <div className="text-xs text-green-600 mt-1">
-                    Booking sẽ được xác nhận ngay lập tức
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="text-xs text-green-600">
+                    ✅ Booking sẽ được xác nhận ngay lập tức
                   </div>
                 </div>
               </div>

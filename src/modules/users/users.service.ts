@@ -42,6 +42,18 @@ export class UsersService {
     });
   }
 
+  async findById(id: number) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+  }
+
   /**
    * Update user profile (email, name)
    */
@@ -88,5 +100,43 @@ export class UsersService {
       message: 'Profile updated successfully',
       user: updatedUser,
     };
+  }
+
+  /**
+   * Update user by admin (name, role, isActive)
+   */
+  async updateUser(
+    userId: number,
+    data: { name?: string; role?: string; isActive?: boolean },
+  ) {
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Update user
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.role !== undefined && { role: data.role as any }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return updatedUser;
   }
 }

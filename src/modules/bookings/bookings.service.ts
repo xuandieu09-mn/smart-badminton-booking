@@ -624,6 +624,7 @@ export class BookingsService {
             name: true,
           },
         },
+        payment: true, // Include payment relation
       },
       orderBy: {
         createdAt: 'desc',
@@ -706,7 +707,9 @@ export class BookingsService {
    * ✅ Finish booking (Manual completion by staff)
    * Update status from CHECKED_IN to COMPLETED
    */
-  async finishBooking(bookingId: number): Promise<{ message: string; booking: any }> {
+  async finishBooking(
+    bookingId: number,
+  ): Promise<{ message: string; booking: any }> {
     // Get booking
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },

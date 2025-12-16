@@ -99,7 +99,21 @@ export class BookingsController {
   }
 
   /**
-   * 📊 Get all bookings (Staff/Admin only)
+   * � Get bookings for a specific user (Admin/Staff)
+   */
+  @Get('user/:userId')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getUserBookingsByUserId(@Param('userId', ParseIntPipe) userId: number) {
+    const bookings = await this.bookingsService.getUserBookings(userId);
+    return {
+      message: 'User bookings',
+      total: bookings.length,
+      bookings,
+    };
+  }
+
+  /**
+   * �📊 Get all bookings (Staff/Admin only)
    */
   @Get()
   @Roles(Role.STAFF, Role.ADMIN)

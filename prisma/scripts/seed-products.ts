@@ -25,7 +25,7 @@ const products = [
     price: 200000,
     stock: 20,
   },
-  
+
   // Beverages
   {
     name: 'Nước suối Aquafina',
@@ -55,7 +55,7 @@ const products = [
     price: 25000,
     stock: 30,
   },
-  
+
   // Accessories
   {
     name: 'Quấn cán Yonex AC102',
@@ -85,7 +85,7 @@ const products = [
     price: 120000,
     stock: 25,
   },
-  
+
   // Equipment
   {
     name: 'Vợt Yonex Nanoray',
@@ -101,7 +101,7 @@ const products = [
     price: 1500000,
     stock: 8,
   },
-  
+
   // Other
   {
     name: 'Khăn lau mặt',

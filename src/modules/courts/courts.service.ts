@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateCourtDto,
@@ -16,16 +16,27 @@ export class CourtsService {
    * Create a new court
    */
   async create(data: CreateCourtDto): Promise<CourtResponseDto> {
-    const court = await this.prisma.court.create({
-      data: {
-        name: data.name,
-        description: data.description,
-        pricePerHour: data.pricePerHour,
-        isActive: true,
-      },
-    });
+    try {
+      console.log('📥 Creating court with data:', JSON.stringify(data, null, 2));
+      
+      const court = await this.prisma.court.create({
+        data: {
+          name: data.name,
+          description: data.description || null,
+          pricePerHour: Number(data.pricePerHour), // Ensure number type for Decimal
+          isActive: data.isActive ?? true,
+        },
+      });
 
-    return this.mapToResponse(court);
+      console.log('✅ Court created successfully:', court.id);
+      return this.mapToResponse(court);
+    } catch (error) {
+      console.error('❌ Error creating court:', error);
+      console.error('📋 Received data:', data);
+      throw new BadRequestException(
+        `Lỗi tạo sân: ${error.message || 'Unknown error'}`,
+      );
+    }
   }
 
   /**
@@ -65,9 +76,10 @@ export class CourtsService {
     const court = await this.prisma.court.update({
       where: { id },
       data: {
-        name: data.name ?? undefined,
-        description: data.description ?? undefined,
-        pricePerHour: data.pricePerHour ?? undefined,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.pricePerHour !== undefined && { pricePerHour: data.pricePerHour }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });
 
@@ -75,10 +87,21 @@ export class CourtsService {
   }
 
   /**
-   * Delete court
+   * Delete court (only if no bookings exist)
    */
   async delete(id: number): Promise<{ message: string }> {
     await this.findById(id);
+
+    // Check if court has any bookings
+    const bookingCount = await this.prisma.booking.count({
+      where: { courtId: id },
+    });
+
+    if (bookingCount > 0) {
+      throw new BadRequestException(
+        `Không thể xóa sân #${id}. Sân có ${bookingCount} booking. Vui lòng vô hiệu hóa sân thay vì xóa.`,
+      );
+    }
 
     await this.prisma.court.delete({
       where: { id },

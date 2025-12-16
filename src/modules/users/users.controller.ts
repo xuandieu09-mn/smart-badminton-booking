@@ -91,4 +91,18 @@ export class UsersController {
       user,
     };
   }
+
+  // ✅ 6. Update user (Admin only) - name, role, isActive
+  @Put(':id')
+  @Roles(Role.ADMIN)
+  async updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { name?: string; role?: Role; isActive?: boolean },
+  ) {
+    const updatedUser = await this.usersService.updateUser(id, dto);
+    return {
+      message: 'User updated successfully',
+      user: updatedUser,
+    };
+  }
 }

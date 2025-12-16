@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/sale.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
@@ -24,7 +24,11 @@ export class SalesController {
   @Post()
   @Roles(Role.STAFF, Role.ADMIN)
   async createSale(@Body() dto: CreateSaleDto, @Req() req: any) {
-    const sale = await this.salesService.createSale(dto, req.user.sub);
+    const staffId = req.user?.sub || req.user?.id;
+    if (!staffId) {
+      throw new Error('Staff ID not found in request');
+    }
+    const sale = await this.salesService.createSale(dto, staffId);
     return {
       message: 'Sale created successfully',
       sale,

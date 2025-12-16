@@ -51,7 +51,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.debug(
       `Attempting to emit to user ${userId}, socketId: ${socketId}, connected users: ${Array.from(this.userSocketMap.keys()).join(', ')}`,
     );
-    
+
     if (socketId) {
       this.server.to(socketId).emit('booking:status-changed', payload);
       this.logger.log(
