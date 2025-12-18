@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import apiClient from '../../../services/api/client';
 import { TimelineBooking } from '../components/TimelineResourceGrid';
-import { socketService } from '../../../services/socket.service';
 
 /**
  * Lấy tất cả bookings cho một sân cụ thể vào một ngày nhất định
@@ -34,32 +33,49 @@ export const useAllCourtBookingsByDate = (date?: string) => {
     queryKey: ['all-court-bookings', date],
     queryFn: async () => {
       if (!date) return [];
+      console.log('🔄 [useAllCourtBookingsByDate] Fetching bookings for date:', date);
       const { data } = await apiClient.get<TimelineBooking[]>(
         `/bookings/by-date`,
         { params: { date } },
       );
+      console.log('✅ [useAllCourtBookingsByDate] Received', data.length, 'bookings');
       return data;
     },
     enabled: Boolean(date),
-    staleTime: 2 * 60 * 1000, // 2 phút
+    staleTime: 0, // Always refetch when invalidated
+    refetchOnWindowFocus: true,
   });
 
-  // ✅ Real-time update via Socket.IO
+  // ✅ Real-time update via Socket.IO (using window events from SocketContext)
   useEffect(() => {
-    const handleStatusChange = () => {
-      queryClient.invalidateQueries({ queryKey: ['all-court-bookings', date] });
+    const handleBookingCreated = (event: CustomEvent) => {
+      console.log('📅 [useAllCourtBookingsByDate] Booking created event received:', event.detail);
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ['all-court-bookings', date] });
     };
 
-    const handleCourtUpdate = () => {
-      queryClient.invalidateQueries({ queryKey: ['all-court-bookings', date] });
+    const handleBookingUpdated = (event: CustomEvent) => {
+      console.log('📅 [useAllCourtBookingsByDate] Booking updated event received:', event.detail);
+      queryClient.refetchQueries({ queryKey: ['all-court-bookings', date] });
     };
 
-    socketService.onBookingStatusChange(handleStatusChange);
-    socketService.socket?.on('court:status-update', handleCourtUpdate);
+    const handleBookingCancelled = (event: CustomEvent) => {
+      console.log('📅 [useAllCourtBookingsByDate] Booking cancelled event received:', event.detail);
+      queryClient.refetchQueries({ queryKey: ['all-court-bookings', date] });
+    };
+
+    // Listen to custom events dispatched by SocketContext
+    window.addEventListener('booking-created', handleBookingCreated as EventListener);
+    window.addEventListener('booking-updated', handleBookingUpdated as EventListener);
+    window.addEventListener('booking-cancelled', handleBookingCancelled as EventListener);
+
+    console.log('🔌 [useAllCourtBookingsByDate] Event listeners registered for date:', date);
 
     return () => {
-      socketService.socket?.off('booking:status-change', handleStatusChange);
-      socketService.socket?.off('court:status-update', handleCourtUpdate);
+      window.removeEventListener('booking-created', handleBookingCreated as EventListener);
+      window.removeEventListener('booking-updated', handleBookingUpdated as EventListener);
+      window.removeEventListener('booking-cancelled', handleBookingCancelled as EventListener);
+      console.log('🔌 [useAllCourtBookingsByDate] Event listeners removed for date:', date);
     };
   }, [date, queryClient]);
 

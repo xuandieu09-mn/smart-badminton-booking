@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
+import NotificationBell from '../../../components/common/NotificationBell';
 
 const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -75,7 +76,7 @@ const AdminLayout: React.FC = () => {
               <span className="text-lg">👤</span>
             </div>
             {sidebarOpen && (
-              <div className="text-sm">
+              <div className="flex-1 text-sm">
                 <p className="font-medium">
                   {user?.fullName || user?.name || 'Admin'}
                 </p>
@@ -121,7 +122,7 @@ const AdminLayout: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <button className="p-2 hover:bg-gray-100 rounded-lg">🔔</button>
+            <NotificationBell />
             <button className="p-2 hover:bg-gray-100 rounded-lg">⚙️</button>
           </div>
         </div>

@@ -58,6 +58,48 @@ const AdminCourtsPage: React.FC = () => {
     reason: 'Bảo trì định kỳ',
   });
 
+  // Generate time slots (05:00 - 22:00, every 30 minutes)
+  const generateTimeSlots = () => {
+    const slots: string[] = [];
+    for (let hour = 5; hour <= 22; hour++) {
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      if (hour < 22) {
+        slots.push(`${hour.toString().padStart(2, '0')}:30`);
+      }
+    }
+    return slots;
+  };
+
+  const timeSlots = generateTimeSlots();
+
+  // Filter end time options (must be > start time)
+  const getAvailableEndTimes = () => {
+    const startIdx = timeSlots.indexOf(maintenanceForm.startTime);
+    return startIdx >= 0 ? timeSlots.slice(startIdx + 1) : timeSlots;
+  };
+
+  // Quick preset handler
+  const handleQuickPreset = (start: string, end: string) => {
+    setMaintenanceForm({
+      ...maintenanceForm,
+      startTime: start,
+      endTime: end,
+    });
+  };
+
+  // Auto-set end time when start time changes
+  const handleStartTimeChange = (newStartTime: string) => {
+    const startIdx = timeSlots.indexOf(newStartTime);
+    // Auto set end time = start + 2 hours (or next available slot)
+    const defaultEndIdx = Math.min(startIdx + 4, timeSlots.length - 1); // +4 = +2 hours (30min slots)
+    
+    setMaintenanceForm({
+      ...maintenanceForm,
+      startTime: newStartTime,
+      endTime: timeSlots[defaultEndIdx],
+    });
+  };
+
   useEffect(() => {
     fetchCourts();
   }, []);
@@ -174,14 +216,14 @@ const AdminCourtsPage: React.FC = () => {
     const endDateTime = `${maintenanceForm.date}T${maintenanceForm.endTime}:00`;
 
     try {
+      // 🔧 MAINTENANCE: No payment, no user, just block time
       await apiClient.post('/bookings', {
         courtId: selectedCourt.id,
         startTime: startDateTime,
         endTime: endDateTime,
-        type: 'MAINTENANCE',
-        guestName: 'Bảo trì',
-        guestPhone: maintenanceForm.reason,
-        paymentMethod: 'CASH',
+        type: 'MAINTENANCE', // Backend will handle this
+        guestPhone: maintenanceForm.reason, // Store reason in guestPhone field
+        // ❌ DO NOT send paymentMethod - maintenance doesn't need payment
       });
       alert('✅ Lên lịch bảo trì thành công!');
       setShowMaintenanceModal(false);
@@ -490,9 +532,10 @@ const AdminCourtsPage: React.FC = () => {
               </h2>
 
               <div className="space-y-4 mb-6">
+                {/* Date Picker */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ngày bảo trì
+                    📅 Ngày bảo trì
                   </label>
                   <input
                     type="date"
@@ -505,30 +548,67 @@ const AdminCourtsPage: React.FC = () => {
                   />
                 </div>
 
+                {/* Quick Presets */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ⚡ Chọn nhanh khung giờ
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPreset('06:00', '12:00')}
+                      className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition text-sm font-medium"
+                    >
+                      🌅 Sáng (6:00 - 12:00)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPreset('12:00', '18:00')}
+                      className="px-3 py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-100 transition text-sm font-medium"
+                    >
+                      🌤️ Chiều (12:00 - 18:00)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPreset('18:00', '22:00')}
+                      className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-100 transition text-sm font-medium"
+                    >
+                      🌙 Tối (18:00 - 22:00)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPreset('05:00', '22:00')}
+                      className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-medium"
+                    >
+                      🚫 Cả ngày
+                    </button>
+                  </div>
+                </div>
+
+                {/* Time Dropdowns */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Từ giờ
+                      ⏰ Giờ bắt đầu
                     </label>
-                    <input
-                      type="time"
+                    <select
                       value={maintenanceForm.startTime}
-                      onChange={(e) =>
-                        setMaintenanceForm({
-                          ...maintenanceForm,
-                          startTime: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
+                      onChange={(e) => handleStartTimeChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 bg-white cursor-pointer"
+                    >
+                      {timeSlots.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Đến giờ
+                      ⏰ Giờ kết thúc
                     </label>
-                    <input
-                      type="time"
+                    <select
                       value={maintenanceForm.endTime}
                       onChange={(e) =>
                         setMaintenanceForm({
@@ -536,14 +616,38 @@ const AdminCourtsPage: React.FC = () => {
                           endTime: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 bg-white cursor-pointer"
+                    >
+                      {getAvailableEndTimes().map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
+                {/* Duration Display */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-blue-700 font-medium">
+                      ⏱️ Thời gian bảo trì:
+                    </span>
+                    <span className="text-blue-900 font-bold">
+                      {(() => {
+                        const start = timeSlots.indexOf(maintenanceForm.startTime);
+                        const end = timeSlots.indexOf(maintenanceForm.endTime);
+                        const duration = (end - start) * 0.5; // Each slot = 30 min
+                        return `${duration} giờ`;
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Reason Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Lý do
+                    📝 Lý do bảo trì
                   </label>
                   <input
                     type="text"
@@ -554,11 +658,12 @@ const AdminCourtsPage: React.FC = () => {
                         reason: e.target.value,
                       })
                     }
-                    placeholder="VD: Bảo trì định kỳ, Sửa lưới, Lau sàn..."
+                    placeholder="VD: Bảo trì định kỳ, Sửa lưới, Lau sàn, Sơn sân..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                   />
                 </div>
 
+                {/* Warning */}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-sm text-yellow-800">
                     ⚠️ <strong>Lưu ý:</strong> Sân sẽ bị chặn trong khung giờ này. Khách hàng

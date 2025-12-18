@@ -41,6 +41,11 @@ export class PaymentsService {
       throw new NotFoundException(`Booking with ID ${bookingId} not found`);
     }
 
+    // 🚫 MAINTENANCE bookings don't need payment
+    if (booking.type === 'MAINTENANCE') {
+      throw new BadRequestException('Cannot create payment for maintenance bookings');
+    }
+
     if (booking.totalPrice === null) {
       throw new BadRequestException('Booking total price not set');
     }
@@ -86,6 +91,11 @@ export class PaymentsService {
 
     if (!booking) {
       throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+
+    // 🚫 MAINTENANCE bookings don't need payment
+    if (booking.type === 'MAINTENANCE') {
+      throw new BadRequestException('Cannot pay for maintenance bookings');
     }
 
     // Get user wallet
@@ -236,6 +246,27 @@ export class PaymentsService {
         newStatus: 'CONFIRMED',
         message: `Payment successful for booking ${booking.bookingCode}`,
       });
+    }
+
+    // � Broadcast booking status change for real-time calendar update
+    this.eventsGateway.broadcast('booking:updated', {
+      bookingId: booking.id,
+      courtId: booking.courtId,
+      status: 'CONFIRMED',
+      paymentStatus: 'PAID',
+    });
+
+    // �🔔 Send payment notification to all parties
+    try {
+      this.logger.log(`📤 Calling notifyPaymentSuccess for booking #${booking.bookingCode}...`);
+      await this.notificationsService.notifyPaymentSuccess(
+        result.payment,
+        result.booking,
+      );
+      this.logger.log(`✅ Payment notification sent`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send payment notification: ${error.message}`);
+      this.logger.error(error.stack);
     }
 
     return {
@@ -401,6 +432,11 @@ export class PaymentsService {
 
     if (!booking) {
       throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+
+    // 🚫 MAINTENANCE bookings don't need payment
+    if (booking.type === 'MAINTENANCE') {
+      throw new BadRequestException('Cannot create payment URL for maintenance bookings');
     }
 
     if (booking.userId !== userId) {
@@ -578,6 +614,24 @@ export class PaymentsService {
         newStatus: 'CONFIRMED',
         message: `VNPay payment successful for booking ${booking.bookingCode}`,
       });
+    }
+
+    // � Broadcast booking status change for real-time calendar update
+    this.eventsGateway.broadcast('booking:updated', {
+      bookingId: booking.id,
+      courtId: booking.courtId,
+      status: 'CONFIRMED',
+      paymentStatus: 'PAID',
+    });
+
+    // �🔔 Send payment notification to all parties
+    try {
+      await this.notificationsService.notifyPaymentSuccess(
+        result.payment,
+        result.booking,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send VNPay payment notification: ${error.message}`);
     }
 
     return {

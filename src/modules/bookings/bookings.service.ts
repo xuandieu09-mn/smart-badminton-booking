@@ -100,53 +100,62 @@ export class BookingsService {
       );
     }
 
-    // 4️⃣ Calculate total price
-    const totalPrice = await this.calculatePrice(courtId, start, end);
+    // 4️⃣ Determine booking type first
+    const bookingType = type || BookingType.REGULAR;
+    const isMaintenance = bookingType === BookingType.MAINTENANCE;
 
-    // 5️⃣ Generate booking code
+    // 5️⃣ Calculate total price (MAINTENANCE = 0)
+    const totalPrice = isMaintenance 
+      ? new Decimal(0) 
+      : await this.calculatePrice(courtId, start, end);
+
+    // 6️⃣ Generate booking code
     const bookingCode = await this.generateBookingCode();
 
-    // 6️⃣ Determine booking status and expiration
+    // 7️⃣ Determine booking status and expiration
     // ✅ FIX: Check guestName/guestPhone first (Staff can create guest booking)
     const isGuestBooking = guestName && guestPhone;
-    const bookingType = type || BookingType.REGULAR;
 
     let status: BookingStatus;
     let expiresAt: Date | null = null;
     let finalUserId: number | null = userId;
+    let finalPaymentStatus: PaymentStatus;
 
-    if (isGuestBooking) {
+    if (isMaintenance) {
+      // 🔧 MAINTENANCE: Block time slot, no payment needed
+      status = BookingStatus.BLOCKED;
+      finalPaymentStatus = PaymentStatus.PAID; // Mark as "paid" to skip payment flow
+      finalUserId = null; // No user relation for maintenance
+    } else if (isGuestBooking) {
       // Guest booking: no userId, must use CASH
       finalUserId = null;
       status = BookingStatus.CONFIRMED;
-    } else if (bookingType === BookingType.MAINTENANCE) {
-      status = BookingStatus.BLOCKED;
+      finalPaymentStatus = PaymentStatus.PAID;
     } else if (paymentMethod === PaymentMethod.CASH) {
       status = BookingStatus.CONFIRMED;
+      finalPaymentStatus = PaymentStatus.PAID;
     } else {
       status = BookingStatus.PENDING_PAYMENT;
+      finalPaymentStatus = PaymentStatus.UNPAID;
       expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     }
 
-    // 7️⃣ Create booking in transaction
+    // 8️⃣ Create booking in transaction (MAINTENANCE: no Payment record)
     const booking = await this.prisma.$transaction(async (tx) => {
       const newBooking = await tx.booking.create({
         data: {
           bookingCode,
           courtId,
-          userId: finalUserId, // ✅ Use finalUserId (null for guest)
-          guestName: isGuestBooking ? guestName : null,
-          guestPhone: isGuestBooking ? guestPhone : null,
+          userId: finalUserId, // ✅ null for maintenance/guest
+          guestName: isMaintenance ? 'MAINTENANCE' : (isGuestBooking ? guestName : null),
+          guestPhone: isMaintenance ? dto.guestPhone || 'System maintenance' : (isGuestBooking ? guestPhone : null),
           startTime: start,
           endTime: end,
           totalPrice,
           status,
           type: bookingType,
-          paymentMethod: paymentMethod || null,
-          paymentStatus:
-            status === BookingStatus.CONFIRMED
-              ? PaymentStatus.PAID
-              : PaymentStatus.UNPAID,
+          paymentMethod: isMaintenance ? null : (paymentMethod || null),
+          paymentStatus: finalPaymentStatus,
           createdBy:
             userRole === Role.STAFF || userRole === Role.ADMIN
               ? 'STAFF'
@@ -166,6 +175,9 @@ export class BookingsService {
           },
         },
       });
+
+      // 🚫 DO NOT create Payment record for MAINTENANCE
+      // Payment is only for customer bookings that require actual payment
 
       return newBooking;
     });
@@ -199,6 +211,21 @@ export class BookingsService {
       });
 
       this.eventsGateway.broadcastCourtStatusUpdate(booking.courtId, 'booked');
+    }
+
+    // � Broadcast new booking to ALL clients for real-time calendar update
+    this.eventsGateway.broadcastNewBooking(booking);
+
+    // �🔔 Send notification to staff/admin about new booking (if not maintenance)
+    if (!isMaintenance) {
+      try {
+        this.logger.log(`📤 Calling notifyNewBooking for #${booking.bookingCode}...`);
+        await this.notificationsService.notifyNewBooking(booking);
+        this.logger.log(`✅ Notification sent successfully`);
+      } catch (error) {
+        this.logger.error(`❌ Failed to send new booking notification: ${error.message}`);
+        this.logger.error(error.stack);
+      }
     }
 
     return {
@@ -370,6 +397,13 @@ export class BookingsService {
 
       return results;
     });
+
+    // 📢 Broadcast to all clients for real-time calendar update
+    for (const booking of createdBookings) {
+      this.eventsGateway.broadcastNewBooking(booking);
+    }
+
+    this.logger.log(`📅 Bulk booking created: ${createdBookings.length} bookings broadcasted`);
 
     return createdBookings;
   }
@@ -990,6 +1024,23 @@ export class BookingsService {
         booking.courtId,
         'available',
       );
+    }
+
+    // � Broadcast booking cancelled for real-time calendar update
+    this.eventsGateway.broadcast('booking:cancelled', {
+      bookingId: booking.id,
+      courtId: booking.courtId,
+      bookingCode: booking.bookingCode,
+    });
+
+    // �🔔 Notify staff & admin about cancellation
+    try {
+      await this.notificationsService.notifyBookingCancelled(
+        booking,
+        userId ? 'CUSTOMER' : 'ADMIN',
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send cancellation notification: ${error.message}`);
     }
 
     return {

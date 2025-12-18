@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import NotificationBell from '@/components/common/NotificationBell';
 
 export const Header = () => {
   const { user, logout } = useAuthStore();
@@ -41,6 +42,7 @@ export const Header = () => {
             <span className="text-sm text-gray-700">
               {user?.name || user?.email}
             </span>
+            <NotificationBell />
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"

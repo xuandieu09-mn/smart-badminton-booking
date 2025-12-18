@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +8,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EMAIL_QUEUE, EMAIL_JOBS } from './queue.constants';
 import { SendEmailDto, SendEmailJobData } from './dto/send-email.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import { EventsGateway } from '../../common/websocket/events.gateway';
+import { NotificationType, Role } from '@prisma/client';
+
+interface CreateNotificationDto {
+  userId?: number | null;
+  title: string;
+  message: string;
+  type: NotificationType;
+  metadata?: any;
+}
 
 @Injectable()
 export class NotificationsService {
@@ -18,6 +29,9 @@ export class NotificationsService {
   constructor(
     @InjectQueue(EMAIL_QUEUE) private emailQueue: Queue<SendEmailJobData>,
     private configService: ConfigService,
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => EventsGateway))
+    private eventsGateway: EventsGateway,
   ) {
     this.initializeEmailTransporter();
     this.loadEmailTemplates();
@@ -321,5 +335,294 @@ export class NotificationsService {
         message: `Failed to send test email: ${error.message}`,
       };
     }
+  }
+
+  // ==================== 🔔 REALTIME NOTIFICATIONS ====================
+
+  /**
+   * Create and emit notification to user
+   */
+  async createAndEmitNotification(dto: CreateNotificationDto) {
+    try {
+      // Save to database
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: dto.userId,
+          title: dto.title,
+          message: dto.message,
+          type: dto.type,
+          metadata: dto.metadata || {},
+        },
+      });
+
+      // Emit realtime to user
+      if (dto.userId) {
+        this.eventsGateway.emitToUser(dto.userId, 'notification:new', {
+          id: notification.id,
+          title: notification.title,
+          message: notification.message,
+          type: notification.type,
+          metadata: notification.metadata,
+          createdAt: notification.createdAt,
+        });
+      }
+
+      this.logger.log(
+        `✅ Notification created and emitted: "${dto.title}" to user ${dto.userId || 'ALL'}`,
+      );
+
+      return notification;
+    } catch (error) {
+      this.logger.error(`❌ Failed to create notification: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 🎯 NEW BOOKING - Notify Staff & Admin
+   */
+  async notifyNewBooking(booking: any) {
+    this.logger.log(`🎯 Creating new booking notification for booking #${booking.bookingCode}`);
+    
+    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
+    const customerName = booking.guestName || booking.user?.name || 'Khách';
+    
+    // Format time
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+    const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    
+    const message = `Đơn đặt sân mới #${booking.bookingCode}\n📍 ${courtName}\n⏰ ${timeStr}\n👤 ${customerName}`;
+
+    await this.createAndEmitNotification({
+      userId: null, // Staff/Admin notification (not user-specific)
+      title: '🎯 Đơn đặt sân mới',
+      message,
+      type: NotificationType.SUCCESS,
+      metadata: { bookingId: booking.id, bookingCode: booking.bookingCode },
+    });
+
+    // Emit to staff room
+    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
+      title: '🎯 Đơn đặt sân mới',
+      message,
+      type: 'SUCCESS',
+      bookingId: booking.id,
+    });
+
+    this.logger.log(`✅ New booking notification sent to staff & admin`);
+  }
+
+  /**
+   * ⚠️ BOOKING CANCELLED - Notify Staff & Admin (HIGH PRIORITY)
+   */
+  async notifyBookingCancelled(booking: any, cancelledBy: string) {
+    const customerName = booking.guestName || booking.user?.name || 'Khách';
+    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
+    
+    // Format time
+    const startTime = new Date(booking.startTime);
+    const endTime = new Date(booking.endTime);
+    const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    
+    const message = `🚨 Khách "${customerName}" đã HỦY lịch!\n📍 ${courtName}\n⏰ ${timeStr}\n🔓 Slot này giờ TRỐNG - có thể bán cho khách walk-in!`;
+
+    await this.createAndEmitNotification({
+      userId: null,
+      title: '⚠️ Hủy lịch đặt sân',
+      message,
+      type: NotificationType.WARNING,
+      metadata: {
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        cancelledBy,
+      },
+    });
+
+    // Emit to staff & admin (HIGH PRIORITY)
+    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
+      title: '🚨 HỦY LỊCH - Slot trống!',
+      message,
+      type: 'WARNING',
+      bookingId: booking.id,
+      priority: 'HIGH',
+    });
+    
+    this.logger.log(`⚠️ Cancellation notification sent to staff & admin`);
+  }
+
+  /**
+   * 💰 PAYMENT SUCCESS - Notify Staff & Admin
+   */
+  async notifyPaymentSuccess(payment: any, booking: any) {
+    this.logger.log(`💰 Creating payment notification for booking #${booking.bookingCode}`);
+    
+    const amount = new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+    }).format(Number(payment.amount));
+    
+    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
+    const customerName = booking.guestName || booking.user?.name || 'Khách';
+    const paymentMethod = payment.method || 'N/A';
+
+    const message = `💵 Nhận ${amount} từ "${customerName}"\n📍 ${courtName} - #${booking.bookingCode}\n💳 Phương thức: ${paymentMethod}`;
+
+    await this.createAndEmitNotification({
+      userId: null,
+      title: '💰 Thanh toán thành công',
+      message,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        paymentId: payment.id,
+        bookingId: booking.id,
+        amount: payment.amount,
+      },
+    });
+
+    // Emit to staff & admin
+    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
+      title: '💰 Thanh toán thành công',
+      message,
+      type: 'SUCCESS',
+      paymentId: payment.id,
+      amount: payment.amount,
+    });
+
+    // Also notify customer
+    if (booking.userId) {
+      await this.createAndEmitNotification({
+        userId: booking.userId,
+        title: '✅ Thanh toán thành công',
+        message: `Thanh toán ${amount} cho booking ${booking.bookingCode} đã thành công!`,
+        type: NotificationType.SUCCESS,
+        metadata: { bookingId: booking.id, amount: payment.amount },
+      });
+      
+      // Emit to customer's room
+      this.eventsGateway.emitToUser(booking.userId, 'notification:new', {
+        title: '✅ Thanh toán thành công',
+        message: `Thanh toán ${amount} cho booking ${booking.bookingCode} đã thành công!`,
+        type: 'SUCCESS',
+      });
+    }
+
+    this.logger.log(`✅ Payment notification sent to staff, admin & customer`);
+  }
+
+  /**
+   * 💸 REFUND PROCESSED - Notify Customer
+   */
+  async notifyRefund(booking: any, refundAmount: number) {
+    if (!booking.userId) return;
+
+    const amount = new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+    }).format(refundAmount);
+
+    const message = `Yêu cầu hoàn tiền ${amount} cho booking #${booking.bookingCode} đã được xử lý thành công.`;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '💸 Hoàn tiền thành công',
+      message,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        bookingId: booking.id,
+        refundAmount,
+      },
+    });
+  }
+
+  /**
+   * 🔧 MAINTENANCE SCHEDULED - Broadcast to All
+   */
+  async notifyMaintenanceScheduled(court: any, startTime: Date, endTime: Date) {
+    const message = `${court.name} sẽ bảo trì từ ${startTime.toLocaleString('vi-VN')} đến ${endTime.toLocaleString('vi-VN')}`;
+
+    await this.createAndEmitNotification({
+      userId: null,
+      title: '🔧 Lịch bảo trì sân',
+      message,
+      type: NotificationType.INFO,
+      metadata: {
+        courtId: court.id,
+        startTime,
+        endTime,
+      },
+    });
+
+    // Broadcast to all users
+    this.eventsGateway.broadcast('notification:new', {
+      title: '🔧 Lịch bảo trì sân',
+      message,
+      type: NotificationType.INFO,
+    });
+  }
+
+  /**
+   * ⏰ LATE CHECK-IN - Notify Staff
+   */
+  async notifyLateCheckIn(booking: any) {
+    const message = `Booking #${booking.bookingCode} đã quá giờ check-in. Vui lòng liên hệ khách hàng.`;
+
+    await this.createAndEmitNotification({
+      userId: null,
+      title: '⏰ Booking quá giờ check-in',
+      message,
+      type: NotificationType.WARNING,
+      metadata: {
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+      },
+    });
+
+    this.eventsGateway.emitToStaff('notification:new', {
+      title: '⏰ Booking quá giờ check-in',
+      message,
+      type: NotificationType.WARNING,
+      bookingId: booking.id,
+    });
+  }
+
+  /**
+   * Get notifications for user
+   */
+  async getUserNotifications(userId: number, limit = 20) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Get unread count
+   */
+  async getUnreadCount(userId: number) {
+    return this.prisma.notification.count({
+      where: { userId, isRead: false },
+    });
+  }
+
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(notificationId: number, userId: number) {
+    return this.prisma.notification.update({
+      where: { id: notificationId, userId },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
+
+  /**
+   * Mark all as read
+   */
+  async markAllAsRead(userId: number) {
+    return this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    });
   }
 }

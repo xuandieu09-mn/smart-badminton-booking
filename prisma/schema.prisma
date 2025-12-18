@@ -53,6 +53,13 @@ enum WalletTransactionType {
   ADMIN_ADJUSTMENT // Admin manual adjustment
 }
 
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
 // ==================== MODELS ====================
 
 model User {
@@ -75,6 +82,8 @@ model User {
   adminActions         AdminAction[]
   // Staff sales (POS)
   staffSales           Sale[]        @relation("StaffSales")
+  // User notifications
+  notifications        Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -329,4 +338,25 @@ model SaleItem {
 
   @@index([saleId])
   @@index([productId])
+}
+
+model Notification {
+  id      Int              @id @default(autoincrement())
+  userId  Int?             // Null = broadcast to all
+  user    User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title   String
+  message String           @db.Text
+  type    NotificationType @default(INFO)
+  
+  // Metadata
+  metadata Json?            // Extra data (bookingId, amount, etc.)
+  
+  isRead  Boolean          @default(false)
+  readAt  DateTime?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, isRead])
+  @@index([createdAt])
 }

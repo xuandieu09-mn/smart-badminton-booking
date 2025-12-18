@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
+import NotificationBell from '../../../components/common/NotificationBell';
 
 const StaffLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -84,9 +85,25 @@ const StaffLayout: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800">Staff Portal</h2>
+            <p className="text-xs text-gray-500">
+              {new Date().toLocaleDateString('vi-VN')}
+            </p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <NotificationBell />
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

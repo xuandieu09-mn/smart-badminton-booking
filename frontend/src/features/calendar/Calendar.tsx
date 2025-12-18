@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useCourts } from './hooks/useCourts';
@@ -33,7 +33,8 @@ export const Calendar: React.FC = () => {
   const { data: bookings = [], isLoading: bookingsLoading } =
     useAllCourtBookingsByDate(dateStr);
 
-  // Real-time updates via Socket.IO (handled in useAllCourtBookingsByDate)
+  // 📅 Real-time calendar updates are handled by useAllCourtBookingsByDate hook
+  // which listens to window events from SocketContext automatically
 
   // NEW: Merge consecutive slots into single bookings
   const mergeConsecutiveSlots = (

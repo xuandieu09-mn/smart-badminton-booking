@@ -1,4 +1,13 @@
-import { Controller, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Query,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -26,5 +35,47 @@ export class NotificationsController {
     }
 
     return this.notificationsService.sendTestEmail(toEmail);
+  }
+
+  /**
+   * 🔔 Get user notifications
+   * Usage: GET /api/notifications?limit=20
+   */
+  @Get()
+  async getUserNotifications(@Request() req, @Query('limit') limit?: string) {
+    const userId = req.user.userId;
+    const limitNum = limit ? parseInt(limit) : 20;
+    return this.notificationsService.getUserNotifications(userId, limitNum);
+  }
+
+  /**
+   * 🔔 Get unread count
+   * Usage: GET /api/notifications/unread-count
+   */
+  @Get('unread-count')
+  async getUnreadCount(@Request() req) {
+    const userId = req.user.userId;
+    const count = await this.notificationsService.getUnreadCount(userId);
+    return { count };
+  }
+
+  /**
+   * 🔔 Mark notification as read
+   * Usage: PATCH /api/notifications/:id/read
+   */
+  @Patch(':id/read')
+  async markAsRead(@Param('id') id: string, @Request() req) {
+    const userId = req.user.userId;
+    return this.notificationsService.markAsRead(parseInt(id), userId);
+  }
+
+  /**
+   * 🔔 Mark all as read
+   * Usage: PATCH /api/notifications/read-all
+   */
+  @Patch('read-all')
+  async markAllAsRead(@Request() req) {
+    const userId = req.user.userId;
+    return this.notificationsService.markAllAsRead(userId);
   }
 }

@@ -23,7 +23,7 @@ export class RevenueService {
             lte: endOfDay,
           },
           status: {
-            notIn: ['CANCELLED', 'EXPIRED'],
+            notIn: ['CANCELLED', 'EXPIRED', 'BLOCKED'], // Exclude maintenance
           },
         },
         select: {

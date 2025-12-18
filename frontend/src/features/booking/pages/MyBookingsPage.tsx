@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from '@/services/api/client';
 import { format, differenceInSeconds } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -20,7 +20,8 @@ type BookingStatus =
   | 'CHECKED_IN'
   | 'COMPLETED'
   | 'CANCELLED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'MAINTENANCE';
 
 interface Booking {
   id: number;
@@ -85,6 +86,12 @@ const STATUS_CONFIG: Record<
     bgColor: 'bg-orange-100',
     icon: '⌛',
   },
+  MAINTENANCE: {
+    label: 'Bảo trì',
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-100',
+    icon: '🔧',
+  },
 };
 
 const CountdownTimer: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
@@ -133,6 +140,7 @@ export const MyBookingsPage: React.FC = () => {
   const [realtimeMessage, setRealtimeMessage] = useState('');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Setup Socket.IO listeners for real-time updates
   useBookingEvents({
@@ -169,6 +177,34 @@ export const MyBookingsPage: React.FC = () => {
     },
   });
 
+  // 📅 Listen to real-time booking events
+  useEffect(() => {
+    const handleBookingCreated = () => {
+      console.log('📅 New booking created, refreshing...');
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+    };
+
+    const handleBookingUpdated = () => {
+      console.log('📅 Booking updated, refreshing...');
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+    };
+
+    const handleBookingCancelled = () => {
+      console.log('📅 Booking cancelled, refreshing...');
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+    };
+
+    window.addEventListener('booking-created', handleBookingCreated);
+    window.addEventListener('booking-updated', handleBookingUpdated);
+    window.addEventListener('booking-cancelled', handleBookingCancelled);
+
+    return () => {
+      window.removeEventListener('booking-created', handleBookingCreated);
+      window.removeEventListener('booking-updated', handleBookingUpdated);
+      window.removeEventListener('booking-cancelled', handleBookingCancelled);
+    };
+  }, [queryClient]);
+
   // Fetch wallet balance
   useEffect(() => {
     const fetchWallet = async () => {
@@ -199,6 +235,12 @@ export const MyBookingsPage: React.FC = () => {
   });
 
   const bookings: Booking[] = response?.bookings || [];
+
+  // Refetch bookings when navigating to this page
+  useEffect(() => {
+    console.log('🔄 MyBookingsPage mounted/location changed, refetching...');
+    refetch();
+  }, [location, refetch]);
 
   // Payment mutation (supports both wallet and gateway)
   const { mutate: handlePayment, isPending: isPaying } = useMutation({
@@ -439,7 +481,12 @@ export const MyBookingsPage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {filteredBookings.map((booking) => {
-              const statusConfig = STATUS_CONFIG[booking.status];
+              const statusConfig = STATUS_CONFIG[booking.status] || {
+                label: booking.status,
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100',
+                icon: '📋',
+              };
               const isPending = booking.status === 'PENDING_PAYMENT';
 
               // Check if payment is still valid (not expired)
