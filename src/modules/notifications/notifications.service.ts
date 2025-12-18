@@ -12,13 +12,63 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EventsGateway } from '../../common/websocket/events.gateway';
 import { NotificationType, Role } from '@prisma/client';
 
+// ==================== INTERFACES ====================
+
 interface CreateNotificationDto {
-  userId?: number | null;
+  userId?: number;
   title: string;
   message: string;
   type: NotificationType;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
+
+interface NotificationPayload {
+  id?: number;
+  title: string;
+  message: string;
+  type: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: Date;
+}
+
+// Type for booking objects from Prisma (flexible interface)
+interface BookingData {
+  id: number;
+  bookingCode: string;
+  userId: number;
+  status: string;
+  totalAmount?: unknown;
+  startTime: Date | string;
+  endTime: Date | string;
+  expiresAt?: Date | null;
+  court?: { name: string };
+  user?: { fullName?: string; name?: string; email: string };
+  payment?: { method: string };
+}
+
+// ==================== NOTIFICATION MATRIX ====================
+/**
+ * | STT | Sự kiện                | Đối tượng nhận | Room Socket  | Type    |
+ * |-----|------------------------|----------------|--------------|---------|
+ * | 1   | Khách đặt lịch mới     | Staff          | staff-room   | INFO    |
+ * |     |                        | Customer       | user-{id}    | SUCCESS |
+ * | 2   | Thanh toán thành công  | Staff          | staff-room   | SUCCESS |
+ * |     |                        | Admin          | admin-room   | SUCCESS |
+ * |     |                        | Customer       | user-{id}    | SUCCESS |
+ * | 3   | Khách HỦY sân          | Staff          | staff-room   | WARNING |
+ * |     |                        | Customer       | user-{id}    | INFO    |
+ * | 4   | Sắp hết hạn giữ chỗ    | Customer       | user-{id}    | WARNING |
+ * | 5   | Timeout (Hủy tự động)  | Staff          | staff-room   | INFO    |
+ * |     |                        | Customer       | user-{id}    | ERROR   |
+ * | 6   | Trễ Check-in (>15p)    | Staff          | staff-room   | ERROR   |
+ * |     |                        | Customer       | user-{id}    | WARNING |
+ * | 7   | Giao dịch POS          | Admin          | admin-room   | INFO    |
+ * |-----|------------------------|----------------|--------------|---------|
+ * | 8   | Hoàn tiền              | Customer       | user-{id}    | SUCCESS |
+ * | 9   | Bảo trì sân            | All            | broadcast    | WARNING |
+ * | 10  | Check-in thành công    | Customer       | user-{id}    | SUCCESS |
+ * | 11  | Nhắc nhở lịch đặt      | Customer       | user-{id}    | INFO    |
+ */
 
 @Injectable()
 export class NotificationsService {
@@ -37,17 +87,14 @@ export class NotificationsService {
     this.loadEmailTemplates();
   }
 
-  /**
-   * Initialize Nodemailer transporter
-   */
+  // ==================== EMAIL SETUP ====================
+
   private initializeEmailTransporter() {
     const emailEnabled =
       this.configService.get<string>('EMAIL_ENABLED', 'false') === 'true';
 
     if (!emailEnabled) {
-      this.logger.warn(
-        'Email notifications are DISABLED. Set EMAIL_ENABLED=true to enable.',
-      );
+      this.logger.warn('📧 Email notifications DISABLED');
       return;
     }
 
@@ -58,33 +105,25 @@ export class NotificationsService {
     const emailFrom = this.configService.get<string>('EMAIL_FROM');
 
     if (!emailHost || !emailUser || !emailPass) {
-      this.logger.error(
-        'Email configuration is incomplete. Please set EMAIL_HOST, EMAIL_USER, EMAIL_PASS',
-      );
+      this.logger.error('❌ Email configuration incomplete');
       return;
     }
 
     this.transporter = nodemailer.createTransport({
       host: emailHost,
       port: emailPort,
-      secure: emailPort === 465, // true for 465, false for other ports
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
+      secure: emailPort === 465,
+      auth: { user: emailUser, pass: emailPass },
     });
 
-    this.logger.log(`Email transporter initialized: ${emailFrom}`);
+    this.logger.log(`📧 Email transporter initialized: ${emailFrom}`);
   }
 
-  /**
-   * Load Handlebars email templates
-   */
   private loadEmailTemplates() {
     const templatesDir = path.join(__dirname, 'templates');
 
     if (!fs.existsSync(templatesDir)) {
-      this.logger.warn(`Templates directory not found: ${templatesDir}`);
+      this.logger.warn(`⚠️ Templates directory not found: ${templatesDir}`);
       return;
     }
 
@@ -101,494 +140,644 @@ export class NotificationsService {
         const template = handlebars.compile(templateSource);
         const templateName = filename.replace('.hbs', '');
         this.templates.set(templateName, template);
-        this.logger.log(`Loaded email template: ${templateName}`);
-      } else {
-        this.logger.warn(`Template not found: ${templatePath}`);
+        this.logger.log(`📄 Loaded template: ${templateName}`);
       }
     });
   }
 
-  /**
-   * Queue email for async sending
-   */
+  // ==================== EMAIL QUEUE ====================
+
   async queueEmail(data: SendEmailJobData): Promise<void> {
     try {
       await this.emailQueue.add(EMAIL_JOBS.SEND_EMAIL, data, {
         attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000, // 5s → 10s → 20s
-        },
+        backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: true,
         removeOnFail: false,
       });
-
-      this.logger.log(`Email queued for ${data.to} - ${data.subject}`);
+      this.logger.log(`📧 Email queued: ${data.to}`);
     } catch (error) {
-      this.logger.error(`Failed to queue email: ${error.message}`, error.stack);
+      this.logger.error(`❌ Queue email failed: ${error.message}`);
     }
   }
 
-  /**
-   * Send email directly (used by processor)
-   */
   async sendEmail(dto: SendEmailDto): Promise<boolean> {
     const emailEnabled =
       this.configService.get<string>('EMAIL_ENABLED', 'false') === 'true';
 
-    if (!emailEnabled) {
-      this.logger.warn(
-        `Email sending skipped (disabled): ${dto.subject} to ${dto.to}`,
-      );
-      return false;
-    }
-
-    if (!this.transporter) {
-      this.logger.error('Email transporter not initialized');
+    if (!emailEnabled || !this.transporter) {
       return false;
     }
 
     try {
-      // Get template
       const template = this.templates.get(dto.template);
       if (!template) {
-        this.logger.error(`Template not found: ${dto.template}`);
+        this.logger.error(`❌ Template not found: ${dto.template}`);
         return false;
       }
 
-      // Compile HTML from template
       const html = template(dto.context);
-
-      // Send email
       const emailFrom = this.configService.get<string>(
         'EMAIL_FROM',
         'noreply@badminton.com',
       );
 
-      const info = await this.transporter.sendMail({
-        from: `"Smart Badminton Booking" <${emailFrom}>`,
+      await this.transporter.sendMail({
+        from: `"Smart Badminton" <${emailFrom}>`,
         to: dto.to,
         subject: dto.subject,
         html: html,
       });
 
-      this.logger.log(
-        `Email sent successfully to ${dto.to} - MessageID: ${info.messageId}`,
-      );
+      this.logger.log(`✅ Email sent: ${dto.to}`);
       return true;
     } catch (error) {
-      this.logger.error(
-        `Failed to send email to ${dto.to}: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`❌ Send email failed: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Send booking confirmation email
-   */
-  async sendBookingConfirmation(
-    userEmail: string,
-    bookingData: {
-      bookingId: number;
-      customerName: string;
-      bookingCode: string;
-      courtName: string;
-      startTime: Date;
-      endTime: Date;
-      totalPrice: number;
-      paymentMethod: string;
-      qrCode?: string;
-    },
-  ): Promise<void> {
-    const emailData: SendEmailJobData = {
-      bookingId: bookingData.bookingId,
-      to: userEmail,
-      subject: `Xác nhận đặt sân - ${bookingData.bookingCode}`,
-      template: 'booking-confirmation',
-      context: {
-        customerName: bookingData.customerName,
-        bookingCode: bookingData.bookingCode,
-        courtName: bookingData.courtName,
-        startTime: bookingData.startTime.toLocaleString('vi-VN'),
-        endTime: bookingData.endTime.toLocaleString('vi-VN'),
-        totalPrice: bookingData.totalPrice,
-        paymentMethod: bookingData.paymentMethod,
-        qrCode: bookingData.qrCode,
-      },
-    };
-
-    await this.queueEmail(emailData);
-  }
+  // ==================== CORE: CREATE & EMIT ====================
 
   /**
-   * Send payment success email
+   * 📢 Create notification in DB and emit to specific user
    */
-  async sendPaymentSuccess(
-    userEmail: string,
-    bookingData: {
-      bookingId: number;
-      customerName: string;
-      bookingCode: string;
-      courtName: string;
-      startTime: Date;
-      endTime: Date;
-      totalPrice: number;
-      paymentMethod: string;
-      qrCode?: string;
-    },
-  ): Promise<void> {
-    const emailData: SendEmailJobData = {
-      bookingId: bookingData.bookingId,
-      to: userEmail,
-      subject: `Thanh toán thành công - ${bookingData.bookingCode}`,
-      template: 'payment-success',
-      context: {
-        customerName: bookingData.customerName,
-        bookingCode: bookingData.bookingCode,
-        courtName: bookingData.courtName,
-        startTime: bookingData.startTime.toLocaleString('vi-VN'),
-        endTime: bookingData.endTime.toLocaleString('vi-VN'),
-        totalPrice: bookingData.totalPrice,
-        paymentMethod: bookingData.paymentMethod,
-        qrCode: bookingData.qrCode,
-      },
-    };
-
-    await this.queueEmail(emailData);
-  }
-
-  /**
-   * Send booking cancellation email
-   */
-  async sendBookingCancellation(
-    userEmail: string,
-    bookingData: {
-      bookingId: number;
-      customerName: string;
-      bookingCode: string;
-      courtName: string;
-      startTime: Date;
-      endTime: Date;
-      totalPrice: number;
-      cancellationReason?: string;
-      refundAmount?: number;
-    },
-  ): Promise<void> {
-    const emailData: SendEmailJobData = {
-      bookingId: bookingData.bookingId,
-      to: userEmail,
-      subject: `Hủy đặt sân - ${bookingData.bookingCode}`,
-      template: 'booking-cancelled',
-      context: {
-        customerName: bookingData.customerName,
-        bookingCode: bookingData.bookingCode,
-        courtName: bookingData.courtName,
-        startTime: bookingData.startTime.toLocaleString('vi-VN'),
-        endTime: bookingData.endTime.toLocaleString('vi-VN'),
-        totalPrice: bookingData.totalPrice,
-        cancellationReason: bookingData.cancellationReason || 'Không có lý do',
-        refundAmount: bookingData.refundAmount || 0,
-      },
-    };
-
-    await this.queueEmail(emailData);
-  }
-
-  /**
-   * Test email configuration (Admin only)
-   */
-  async sendTestEmail(
-    toEmail: string,
-  ): Promise<{ success: boolean; message: string }> {
+  async createAndEmitNotification(
+    dto: CreateNotificationDto,
+  ): Promise<unknown> {
     try {
-      const result = await this.sendEmail({
-        to: toEmail,
-        subject: 'Test Email - Smart Badminton Booking',
-        template: 'booking-confirmation',
-        context: {
-          customerName: 'Test User',
-          bookingCode: 'TEST-20241214-0000',
-          courtName: 'Sân Test',
-          startTime: new Date().toLocaleString('vi-VN'),
-          endTime: new Date(Date.now() + 3600000).toLocaleString('vi-VN'),
-          totalPrice: 100000,
-          paymentMethod: 'WALLET',
-        },
-      });
-
-      if (result) {
-        return {
-          success: true,
-          message: `Test email sent successfully to ${toEmail}`,
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Email sending is disabled or failed',
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: `Failed to send test email: ${error.message}`,
-      };
-    }
-  }
-
-  // ==================== 🔔 REALTIME NOTIFICATIONS ====================
-
-  /**
-   * Create and emit notification to user
-   */
-  async createAndEmitNotification(dto: CreateNotificationDto) {
-    try {
-      // Save to database
       const notification = await this.prisma.notification.create({
         data: {
           userId: dto.userId,
           title: dto.title,
           message: dto.message,
           type: dto.type,
-          metadata: dto.metadata || {},
+          metadata: (dto.metadata as object) || {},
         },
       });
 
-      // Emit realtime to user
+      const payload: NotificationPayload = {
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        type: notification.type,
+        metadata: notification.metadata as Record<string, unknown>,
+        createdAt: notification.createdAt,
+      };
+
       if (dto.userId) {
-        this.eventsGateway.emitToUser(dto.userId, 'notification:new', {
-          id: notification.id,
-          title: notification.title,
-          message: notification.message,
-          type: notification.type,
-          metadata: notification.metadata,
-          createdAt: notification.createdAt,
-        });
+        this.eventsGateway.emitToUser(dto.userId, 'notification:new', payload);
       }
 
-      this.logger.log(
-        `✅ Notification created and emitted: "${dto.title}" to user ${dto.userId || 'ALL'}`,
-      );
-
+      this.logger.log(`✅ Notification → user ${dto.userId}: "${dto.title}"`);
       return notification;
     } catch (error) {
-      this.logger.error(`❌ Failed to create notification: ${error.message}`);
+      this.logger.error(`❌ createAndEmitNotification: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * 🎯 NEW BOOKING - Notify Staff & Admin
+   * 📢 Create notification for role rooms (Staff/Admin) - saves to DB with userId=null
    */
-  async notifyNewBooking(booking: any) {
-    this.logger.log(`🎯 Creating new booking notification for booking #${booking.bookingCode}`);
-    
-    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
-    const customerName = booking.guestName || booking.user?.name || 'Khách';
-    
-    // Format time
-    const startTime = new Date(booking.startTime);
-    const endTime = new Date(booking.endTime);
-    const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-    
-    const message = `Đơn đặt sân mới #${booking.bookingCode}\n📍 ${courtName}\n⏰ ${timeStr}\n👤 ${customerName}`;
+  async createRoleNotification(
+    targetRooms: ('staff-room' | 'admin-room')[],
+    dto: Omit<CreateNotificationDto, 'userId'>,
+  ): Promise<void> {
+    try {
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: null,
+          title: dto.title,
+          message: dto.message,
+          type: dto.type,
+          metadata: (dto.metadata as object) || {},
+        },
+      });
 
-    await this.createAndEmitNotification({
-      userId: null, // Staff/Admin notification (not user-specific)
-      title: '🎯 Đơn đặt sân mới',
-      message,
-      type: NotificationType.SUCCESS,
-      metadata: { bookingId: booking.id, bookingCode: booking.bookingCode },
-    });
+      const payload: NotificationPayload = {
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        type: notification.type,
+        metadata: notification.metadata as Record<string, unknown>,
+        createdAt: notification.createdAt,
+      };
 
-    // Emit to staff room
-    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
-      title: '🎯 Đơn đặt sân mới',
-      message,
-      type: 'SUCCESS',
-      bookingId: booking.id,
-    });
+      for (const room of targetRooms) {
+        if (room === 'staff-room') {
+          this.eventsGateway.emitToStaff('notification:new', payload);
+        } else if (room === 'admin-room') {
+          this.eventsGateway.emitToAdmin('notification:new', payload);
+        }
+      }
 
-    this.logger.log(`✅ New booking notification sent to staff & admin`);
+      this.logger.log(
+        `✅ Role notification → ${targetRooms.join(', ')}: "${dto.title}"`,
+      );
+    } catch (error) {
+      this.logger.error(`❌ createRoleNotification: ${error.message}`);
+    }
   }
 
-  /**
-   * ⚠️ BOOKING CANCELLED - Notify Staff & Admin (HIGH PRIORITY)
-   */
-  async notifyBookingCancelled(booking: any, cancelledBy: string) {
-    const customerName = booking.guestName || booking.user?.name || 'Khách';
-    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
-    
-    // Format time
-    const startTime = new Date(booking.startTime);
-    const endTime = new Date(booking.endTime);
-    const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-    
-    const message = `🚨 Khách "${customerName}" đã HỦY lịch!\n📍 ${courtName}\n⏰ ${timeStr}\n🔓 Slot này giờ TRỐNG - có thể bán cho khách walk-in!`;
+  // ============================================================
+  // | #1 | KHÁCH ĐẶT LỊCH MỚI - NEW BOOKING
+  // ============================================================
 
-    await this.createAndEmitNotification({
-      userId: null,
-      title: '⚠️ Hủy lịch đặt sân',
-      message,
-      type: NotificationType.WARNING,
+  /**
+   * 🎯 #1a: Notify STAFF about new booking
+   */
+  async notifyStaffNewBooking(booking: BookingData): Promise<void> {
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+    const customerName =
+      booking.user?.fullName || booking.user?.name || 'Khách';
+    const startTime = new Date(booking.startTime);
+    const timeStr = startTime.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    await this.createRoleNotification(['staff-room'], {
+      title: '🎯 Đơn đặt sân mới',
+      message: `Mới: ${customerName} vừa đặt ${courtName} lúc ${timeStr} (Chờ thanh toán).`,
+      type: NotificationType.INFO,
       metadata: {
+        event: 'NEW_BOOKING',
         bookingId: booking.id,
         bookingCode: booking.bookingCode,
-        cancelledBy,
+        courtId: booking.id,
       },
     });
-
-    // Emit to staff & admin (HIGH PRIORITY)
-    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
-      title: '🚨 HỦY LỊCH - Slot trống!',
-      message,
-      type: 'WARNING',
-      bookingId: booking.id,
-      priority: 'HIGH',
-    });
-    
-    this.logger.log(`⚠️ Cancellation notification sent to staff & admin`);
   }
 
   /**
-   * 💰 PAYMENT SUCCESS - Notify Staff & Admin
+   * 🎯 #1b: Notify CUSTOMER about booking success
    */
-  async notifyPaymentSuccess(payment: any, booking: any) {
-    this.logger.log(`💰 Creating payment notification for booking #${booking.bookingCode}`);
-    
-    const amount = new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
-    }).format(Number(payment.amount));
-    
-    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
-    const customerName = booking.guestName || booking.user?.name || 'Khách';
-    const paymentMethod = payment.method || 'N/A';
-
-    const message = `💵 Nhận ${amount} từ "${customerName}"\n📍 ${courtName} - #${booking.bookingCode}\n💳 Phương thức: ${paymentMethod}`;
-
-    await this.createAndEmitNotification({
-      userId: null,
-      title: '💰 Thanh toán thành công',
-      message,
-      type: NotificationType.SUCCESS,
-      metadata: {
-        paymentId: payment.id,
-        bookingId: booking.id,
-        amount: payment.amount,
-      },
-    });
-
-    // Emit to staff & admin
-    this.eventsGateway.emitToStaffAndAdmin('notification:new', {
-      title: '💰 Thanh toán thành công',
-      message,
-      type: 'SUCCESS',
-      paymentId: payment.id,
-      amount: payment.amount,
-    });
-
-    // Also notify customer
-    if (booking.userId) {
-      await this.createAndEmitNotification({
-        userId: booking.userId,
-        title: '✅ Thanh toán thành công',
-        message: `Thanh toán ${amount} cho booking ${booking.bookingCode} đã thành công!`,
-        type: NotificationType.SUCCESS,
-        metadata: { bookingId: booking.id, amount: payment.amount },
-      });
-      
-      // Emit to customer's room
-      this.eventsGateway.emitToUser(booking.userId, 'notification:new', {
-        title: '✅ Thanh toán thành công',
-        message: `Thanh toán ${amount} cho booking ${booking.bookingCode} đã thành công!`,
-        type: 'SUCCESS',
-      });
-    }
-
-    this.logger.log(`✅ Payment notification sent to staff, admin & customer`);
-  }
-
-  /**
-   * 💸 REFUND PROCESSED - Notify Customer
-   */
-  async notifyRefund(booking: any, refundAmount: number) {
+  async notifyCustomerBookingSuccess(booking: BookingData): Promise<void> {
     if (!booking.userId) return;
 
-    const amount = new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
-    }).format(refundAmount);
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
 
-    const message = `Yêu cầu hoàn tiền ${amount} cho booking #${booking.bookingCode} đã được xử lý thành công.`;
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '✅ Giữ chỗ thành công',
+      message: `Giữ chỗ thành công ${courtName}. Vui lòng thanh toán trong 15 phút.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'BOOKING_CREATED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        expiresAt: booking.expiresAt,
+      },
+    });
+  }
+
+  /**
+   * 🎯 #1 COMBINED: New Booking Event
+   */
+  async notifyNewBooking(booking: BookingData): Promise<void> {
+    this.logger.log(`🎯 notifyNewBooking: #${booking.bookingCode}`);
+    await this.notifyStaffNewBooking(booking);
+    await this.notifyCustomerBookingSuccess(booking);
+  }
+
+  // ============================================================
+  // | #2 | THANH TOÁN THÀNH CÔNG - PAYMENT SUCCESS
+  // ============================================================
+
+  /**
+   * 💰 #2a: Notify STAFF about payment
+   */
+  async notifyStaffPaymentSuccess(
+    payment: { id: number; amount: unknown },
+    booking: BookingData,
+  ): Promise<void> {
+    await this.createRoleNotification(['staff-room'], {
+      title: '💰 Thanh toán mới',
+      message: `💰 Đã nhận tiền đơn #${booking.bookingCode}. Sân đã confirm.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'PAYMENT_SUCCESS',
+        paymentId: payment.id,
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        amount: Number(payment.amount),
+      },
+    });
+  }
+
+  /**
+   * 💰 #2b: Notify ADMIN about revenue
+   */
+  async notifyAdminPaymentSuccess(
+    payment: { id: number; amount: unknown },
+    booking: BookingData,
+  ): Promise<void> {
+    const amount = this.formatCurrency(Number(payment.amount));
+
+    await this.createRoleNotification(['admin-room'], {
+      title: '💰 Doanh thu mới',
+      message: `💰 Doanh thu: +${amount} (Đơn #${booking.bookingCode}).`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'REVENUE_RECEIVED',
+        paymentId: payment.id,
+        bookingId: booking.id,
+        amount: Number(payment.amount),
+      },
+    });
+  }
+
+  /**
+   * 💰 #2c: Notify CUSTOMER about payment success
+   */
+  async notifyCustomerPaymentSuccess(
+    payment: { id: number; amount: unknown },
+    booking: BookingData,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '✅ Thanh toán thành công',
+      message: `Thanh toán thành công. Mã #${booking.bookingCode} đã xác nhận.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'PAYMENT_SUCCESS',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        amount: Number(payment.amount),
+      },
+    });
+  }
+
+  /**
+   * 💰 #2 COMBINED: Payment Success Event
+   */
+  async notifyPaymentSuccess(
+    payment: { id: number; amount: unknown },
+    booking: BookingData,
+  ): Promise<void> {
+    this.logger.log(`💰 notifyPaymentSuccess: #${booking.bookingCode}`);
+    await this.notifyStaffPaymentSuccess(payment, booking);
+    await this.notifyAdminPaymentSuccess(payment, booking);
+    await this.notifyCustomerPaymentSuccess(payment, booking);
+  }
+
+  // ============================================================
+  // | #3 | KHÁCH HỦY SÂN - BOOKING CANCELLED
+  // ============================================================
+
+  /**
+   * ⚠️ #3a: Notify STAFF about cancellation
+   */
+  async notifyStaffBookingCancelled(booking: BookingData): Promise<void> {
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+    const startTime = new Date(booking.startTime);
+    const timeStr = startTime.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    await this.createRoleNotification(['staff-room'], {
+      title: '⚠️ Hủy lịch - Sân TRỐNG',
+      message: `⚠️ Cảnh báo: Booking #${booking.bookingCode} đã hủy. ${courtName} lúc ${timeStr} - SÂN TRỐNG.`,
+      type: NotificationType.WARNING,
+      metadata: {
+        event: 'BOOKING_CANCELLED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        courtId: booking.id,
+        slotAvailable: true,
+      },
+    });
+  }
+
+  /**
+   * ⚠️ #3b: Notify CUSTOMER about their cancellation
+   */
+  async notifyCustomerBookingCancelled(booking: BookingData): Promise<void> {
+    if (!booking.userId) return;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: 'ℹ️ Đã hủy lịch',
+      message: `Hủy thành công đơn #${booking.bookingCode}.`,
+      type: NotificationType.INFO,
+      metadata: {
+        event: 'BOOKING_CANCELLED_BY_USER',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+      },
+    });
+  }
+
+  /**
+   * ⚠️ #3 COMBINED: Booking Cancelled Event
+   */
+  async notifyBookingCancelled(booking: BookingData): Promise<void> {
+    this.logger.log(`⚠️ notifyBookingCancelled: #${booking.bookingCode}`);
+    await this.notifyStaffBookingCancelled(booking);
+    await this.notifyCustomerBookingCancelled(booking);
+  }
+
+  // ============================================================
+  // | #4 | SẮP HẾT HẠN GIỮ CHỖ - EXPIRING SOON
+  // ============================================================
+
+  /**
+   * ⏳ #4: Notify CUSTOMER about expiring booking
+   */
+  async notifyBookingExpiringSoon(
+    booking: BookingData,
+    minutesLeft = 5,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '⏳ Sắp hết hạn thanh toán',
+      message: `⏳ Còn ${minutesLeft} phút để thanh toán đơn #${booking.bookingCode}.`,
+      type: NotificationType.WARNING,
+      metadata: {
+        event: 'BOOKING_EXPIRING',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        minutesLeft,
+      },
+    });
+
+    this.logger.log(`⏳ Expiring soon: #${booking.bookingCode}`);
+  }
+
+  // ============================================================
+  // | #5 | TIMEOUT - HỦY TỰ ĐỘNG
+  // ============================================================
+
+  /**
+   * ℹ️ #5a: Notify STAFF about timeout
+   */
+  async notifyStaffBookingTimeout(booking: BookingData): Promise<void> {
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+
+    await this.createRoleNotification(['staff-room'], {
+      title: 'ℹ️ Hết hạn thanh toán',
+      message: `ℹ️ Đơn #${booking.bookingCode} bị hủy do quá hạn. ${courtName} - Sân trống.`,
+      type: NotificationType.INFO,
+      metadata: {
+        event: 'BOOKING_EXPIRED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        courtId: booking.id,
+        slotAvailable: true,
+      },
+    });
+  }
+
+  /**
+   * ❌ #5b: Notify CUSTOMER about timeout
+   */
+  async notifyCustomerBookingTimeout(booking: BookingData): Promise<void> {
+    if (!booking.userId) return;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '❌ Hết hạn thanh toán',
+      message: `Đơn #${booking.bookingCode} đã hủy do hết hạn thanh toán.`,
+      type: NotificationType.ERROR,
+      metadata: {
+        event: 'BOOKING_EXPIRED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+      },
+    });
+  }
+
+  /**
+   * ⏰ #5 COMBINED: Booking Timeout Event
+   */
+  async notifyBookingTimeout(booking: BookingData): Promise<void> {
+    this.logger.log(`⏰ notifyBookingTimeout: #${booking.bookingCode}`);
+    await this.notifyStaffBookingTimeout(booking);
+    await this.notifyCustomerBookingTimeout(booking);
+  }
+
+  // ============================================================
+  // | #6 | TRỄ CHECK-IN (>15p) - LATE CHECK-IN
+  // ============================================================
+
+  /**
+   * 🚨 #6a: Notify STAFF about late check-in
+   */
+  async notifyStaffLateCheckIn(
+    booking: BookingData,
+    minutesLate: number,
+  ): Promise<void> {
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+
+    await this.createRoleNotification(['staff-room'], {
+      title: '🚨 Khách trễ check-in',
+      message: `🚨 Khách đơn #${booking.bookingCode} chưa đến (Trễ ${minutesLate}p). ${courtName} - Check ngay!`,
+      type: NotificationType.ERROR,
+      metadata: {
+        event: 'LATE_CHECKIN',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        courtId: booking.id,
+        minutesLate,
+      },
+    });
+  }
+
+  /**
+   * ⚠️ #6b: Notify CUSTOMER about late check-in
+   */
+  async notifyCustomerLateCheckIn(
+    booking: BookingData,
+    minutesLate: number,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '⚠️ Bạn đang trễ check-in',
+      message: `Sân ${courtName} đã bắt đầu ${minutesLate} phút. Vui lòng check-in ngay.`,
+      type: NotificationType.WARNING,
+      metadata: {
+        event: 'LATE_CHECKIN',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        minutesLate,
+      },
+    });
+  }
+
+  /**
+   * 🚨 #6 COMBINED: Late Check-in Event
+   */
+  async notifyLateCheckIn(
+    booking: BookingData,
+    minutesLate = 15,
+  ): Promise<void> {
+    this.logger.log(
+      `🚨 notifyLateCheckIn: #${booking.bookingCode} (${minutesLate}p)`,
+    );
+    await this.notifyStaffLateCheckIn(booking, minutesLate);
+    await this.notifyCustomerLateCheckIn(booking, minutesLate);
+  }
+
+  // ============================================================
+  // | #7 | GIAO DỊCH POS - POS SALE
+  // ============================================================
+
+  /**
+   * 💰 #7: Notify ADMIN about POS sale
+   */
+  async notifyPOSSale(sale: {
+    id: number;
+    saleCode: string;
+    totalAmount: unknown;
+    staffId: number;
+    staff?: { name: string };
+  }): Promise<void> {
+    const amount = this.formatCurrency(Number(sale.totalAmount));
+    const staffName = sale.staff?.name || 'Staff';
+
+    await this.createRoleNotification(['admin-room'], {
+      title: '💰 Giao dịch POS',
+      message: `💰 Doanh thu POS: +${amount}. Nhân viên: ${staffName}.`,
+      type: NotificationType.INFO,
+      metadata: {
+        event: 'POS_SALE',
+        saleId: sale.id,
+        saleCode: sale.saleCode,
+        amount: Number(sale.totalAmount),
+        staffId: sale.staffId,
+      },
+    });
+
+    this.logger.log(`💰 POS sale: ${sale.saleCode}`);
+  }
+
+  // ============================================================
+  // | BONUS EVENTS
+  // ============================================================
+
+  /**
+   * 💸 #8: Notify CUSTOMER about refund
+   */
+  async notifyRefund(
+    booking: BookingData,
+    refundAmount: number,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    const amount = this.formatCurrency(refundAmount);
 
     await this.createAndEmitNotification({
       userId: booking.userId,
       title: '💸 Hoàn tiền thành công',
-      message,
+      message: `Hoàn tiền ${amount} cho đơn #${booking.bookingCode} đã chuyển vào ví.`,
       type: NotificationType.SUCCESS,
       metadata: {
+        event: 'REFUND_PROCESSED',
         bookingId: booking.id,
+        bookingCode: booking.bookingCode,
         refundAmount,
       },
     });
+
+    this.logger.log(`💸 Refund: #${booking.bookingCode}`);
   }
 
   /**
-   * 🔧 MAINTENANCE SCHEDULED - Broadcast to All
+   * 🔧 #9: Notify ALL about court maintenance
    */
-  async notifyMaintenanceScheduled(court: any, startTime: Date, endTime: Date) {
-    const message = `${court.name} sẽ bảo trì từ ${startTime.toLocaleString('vi-VN')} đến ${endTime.toLocaleString('vi-VN')}`;
+  async notifyCourtMaintenance(
+    court: { id: number; name: string },
+    startTime: Date,
+    endTime: Date,
+  ): Promise<void> {
+    const timeRange = `${startTime.toLocaleString('vi-VN')} - ${endTime.toLocaleString('vi-VN')}`;
 
-    await this.createAndEmitNotification({
-      userId: null,
-      title: '🔧 Lịch bảo trì sân',
-      message,
-      type: NotificationType.INFO,
-      metadata: {
-        courtId: court.id,
-        startTime,
-        endTime,
+    await this.prisma.notification.create({
+      data: {
+        userId: null,
+        title: '🔧 Lịch bảo trì sân',
+        message: `🔧 ${court.name} sẽ bảo trì từ ${timeRange}. Vui lòng chọn sân khác.`,
+        type: NotificationType.WARNING,
+        metadata: {
+          event: 'COURT_MAINTENANCE',
+          courtId: court.id,
+          courtName: court.name,
+        },
       },
     });
 
-    // Broadcast to all users
     this.eventsGateway.broadcast('notification:new', {
       title: '🔧 Lịch bảo trì sân',
-      message,
-      type: NotificationType.INFO,
+      message: `🔧 ${court.name} sẽ bảo trì từ ${timeRange}. Vui lòng chọn sân khác.`,
+      type: 'WARNING',
     });
+
+    this.logger.log(`🔧 Maintenance: ${court.name}`);
   }
 
   /**
-   * ⏰ LATE CHECK-IN - Notify Staff
+   * ✅ #10: Notify CUSTOMER about successful check-in
    */
-  async notifyLateCheckIn(booking: any) {
-    const message = `Booking #${booking.bookingCode} đã quá giờ check-in. Vui lòng liên hệ khách hàng.`;
+  async notifyCheckInSuccess(booking: BookingData): Promise<void> {
+    if (!booking.userId) return;
+
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
 
     await this.createAndEmitNotification({
-      userId: null,
-      title: '⏰ Booking quá giờ check-in',
-      message,
-      type: NotificationType.WARNING,
+      userId: booking.userId,
+      title: '✅ Check-in thành công',
+      message: `Check-in thành công! Chúc bạn chơi vui vẻ tại ${courtName}.`,
+      type: NotificationType.SUCCESS,
       metadata: {
+        event: 'CHECKIN_SUCCESS',
         bookingId: booking.id,
         bookingCode: booking.bookingCode,
       },
     });
 
-    this.eventsGateway.emitToStaff('notification:new', {
-      title: '⏰ Booking quá giờ check-in',
-      message,
-      type: NotificationType.WARNING,
-      bookingId: booking.id,
-    });
+    this.logger.log(`✅ Check-in: #${booking.bookingCode}`);
   }
 
   /**
-   * Get notifications for user
+   * 📅 #11: Notify CUSTOMER about booking reminder (1 hour before)
    */
+  async notifyBookingReminder(booking: BookingData): Promise<void> {
+    if (!booking.userId) return;
+
+    const courtName = booking.court?.name || `Sân #${booking.id}`;
+    const startTime = new Date(booking.startTime);
+    const timeStr = startTime.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '📅 Nhắc nhở lịch đặt',
+      message: `Nhắc nhở: Bạn có lịch đặt ${courtName} lúc ${timeStr}. Đừng quên check-in!`,
+      type: NotificationType.INFO,
+      metadata: {
+        event: 'BOOKING_REMINDER',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+      },
+    });
+
+    this.logger.log(`📅 Reminder: #${booking.bookingCode}`);
+  }
+
+  // ==================== DATABASE QUERIES ====================
+
   async getUserNotifications(userId: number, limit = 20) {
     return this.prisma.notification.findMany({
       where: { userId },
@@ -597,18 +786,20 @@ export class NotificationsService {
     });
   }
 
-  /**
-   * Get unread count
-   */
+  async getRoleNotifications(role: Role, limit = 50) {
+    return this.prisma.notification.findMany({
+      where: { userId: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
   async getUnreadCount(userId: number) {
     return this.prisma.notification.count({
       where: { userId, isRead: false },
     });
   }
 
-  /**
-   * Mark notification as read
-   */
   async markAsRead(notificationId: number, userId: number) {
     return this.prisma.notification.update({
       where: { id: notificationId, userId },
@@ -616,13 +807,102 @@ export class NotificationsService {
     });
   }
 
-  /**
-   * Mark all as read
-   */
   async markAllAsRead(userId: number) {
     return this.prisma.notification.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true, readAt: new Date() },
     });
+  }
+
+  // ==================== EMAIL TEMPLATES ====================
+
+  async sendBookingConfirmation(userEmail: string, data: any): Promise<void> {
+    await this.queueEmail({
+      bookingId: data.bookingId,
+      to: userEmail,
+      subject: `Xác nhận đặt sân - ${data.bookingCode}`,
+      template: 'booking-confirmation',
+      context: {
+        customerName: data.customerName,
+        bookingCode: data.bookingCode,
+        courtName: data.courtName,
+        startTime: data.startTime.toLocaleString('vi-VN'),
+        endTime: data.endTime.toLocaleString('vi-VN'),
+        totalPrice: data.totalPrice,
+        paymentMethod: data.paymentMethod,
+        qrCode: data.qrCode,
+      },
+    });
+  }
+
+  async sendPaymentSuccess(userEmail: string, data: any): Promise<void> {
+    await this.queueEmail({
+      bookingId: data.bookingId,
+      to: userEmail,
+      subject: `Thanh toán thành công - ${data.bookingCode}`,
+      template: 'payment-success',
+      context: {
+        customerName: data.customerName,
+        bookingCode: data.bookingCode,
+        courtName: data.courtName,
+        startTime: data.startTime.toLocaleString('vi-VN'),
+        endTime: data.endTime.toLocaleString('vi-VN'),
+        totalPrice: data.totalPrice,
+        paymentMethod: data.paymentMethod,
+        qrCode: data.qrCode,
+      },
+    });
+  }
+
+  async sendBookingCancellation(userEmail: string, data: any): Promise<void> {
+    await this.queueEmail({
+      bookingId: data.bookingId,
+      to: userEmail,
+      subject: `Hủy đặt sân - ${data.bookingCode}`,
+      template: 'booking-cancelled',
+      context: {
+        customerName: data.customerName,
+        bookingCode: data.bookingCode,
+        courtName: data.courtName,
+        startTime: data.startTime.toLocaleString('vi-VN'),
+        endTime: data.endTime.toLocaleString('vi-VN'),
+        totalPrice: data.totalPrice,
+        cancellationReason: data.cancellationReason || 'Không có lý do',
+        refundAmount: data.refundAmount || 0,
+      },
+    });
+  }
+
+  async sendTestEmail(
+    toEmail: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const result = await this.sendEmail({
+        to: toEmail,
+        subject: 'Test Email - Smart Badminton',
+        template: 'booking-confirmation',
+        context: {
+          customerName: 'Test User',
+          bookingCode: 'TEST-123456',
+          courtName: 'Sân Test',
+          startTime: new Date().toLocaleString('vi-VN'),
+          endTime: new Date(Date.now() + 3600000).toLocaleString('vi-VN'),
+          totalPrice: 100000,
+          paymentMethod: 'WALLET',
+        },
+      });
+      return { success: result, message: result ? 'Sent' : 'Disabled' };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  // ==================== HELPERS ====================
+
+  private formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+    }).format(Number(amount));
   }
 }

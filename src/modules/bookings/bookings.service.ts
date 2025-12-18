@@ -405,6 +405,18 @@ export class BookingsService {
 
     this.logger.log(`📅 Bulk booking created: ${createdBookings.length} bookings broadcasted`);
 
+    // 🔔 Send notifications to Staff/Admin for each booking
+    for (const booking of createdBookings) {
+      if (booking.type !== 'MAINTENANCE') {
+        try {
+          this.logger.log(`📤 [BULK] Calling notifyNewBooking for #${booking.bookingCode}...`);
+          await this.notificationsService.notifyNewBooking(booking);
+        } catch (error) {
+          this.logger.error(`❌ [BULK] Failed to notify: ${error.message}`);
+        }
+      }
+    }
+
     return createdBookings;
   }
 
@@ -734,6 +746,13 @@ export class BookingsService {
       },
     });
 
+    // 🔔 Notify customer about successful check-in
+    try {
+      await this.notificationsService.notifyCheckInSuccess(updatedBooking);
+    } catch (error) {
+      this.logger.error(`Failed to send check-in notification: ${error.message}`);
+    }
+
     return updatedBooking;
   }
 
@@ -1018,6 +1037,9 @@ export class BookingsService {
             ? Number(updatedWallet.balance)
             : null,
         });
+
+        // 🔔 Send proper refund notification
+        await this.notificationsService.notifyRefund(booking, Number(refundAmount));
       }
 
       this.eventsGateway.broadcastCourtStatusUpdate(
@@ -1035,10 +1057,7 @@ export class BookingsService {
 
     // �🔔 Notify staff & admin about cancellation
     try {
-      await this.notificationsService.notifyBookingCancelled(
-        booking,
-        userId ? 'CUSTOMER' : 'ADMIN',
-      );
+      await this.notificationsService.notifyBookingCancelled(booking);
     } catch (error) {
       this.logger.error(`Failed to send cancellation notification: ${error.message}`);
     }

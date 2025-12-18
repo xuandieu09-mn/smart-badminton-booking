@@ -29,7 +29,7 @@ const CourtManagement: React.FC = () => {
     description: '',
     pricePerHour: 0,
   });
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
   const queryClient = useQueryClient();
 
   const { data: courts = [], isLoading } = useQuery({

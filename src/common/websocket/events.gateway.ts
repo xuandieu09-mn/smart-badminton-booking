@@ -115,21 +115,29 @@ export class EventsGateway
    * Join role-specific rooms
    */
   private async joinRoleRooms(client: Socket, user: any) {
+    this.logger.log(`🔍 [DEBUG] User ${user.email} has role: ${user.role}`);
+    
     switch (user.role) {
       case Role.ADMIN:
         await client.join('admin-room');
         await client.join('staff-room'); // Admin can see staff notifications too
-        this.logger.log(`👑 Admin joined rooms: ${user.email}`);
+        this.logger.log(`👑 Admin "${user.email}" joined: admin-room, staff-room`);
         break;
       case Role.STAFF:
         await client.join('staff-room');
-        this.logger.log(`👨‍💼 Staff joined staff-room: ${user.email}`);
+        this.logger.log(`👨‍💼 Staff "${user.email}" joined: staff-room`);
         break;
       case Role.CUSTOMER:
         await client.join(`user-${user.id}`);
-        this.logger.log(`👤 Customer joined user-${user.id}: ${user.email}`);
+        this.logger.log(`👤 Customer "${user.email}" joined: user-${user.id}`);
         break;
+      default:
+        this.logger.warn(`⚠️ Unknown role for ${user.email}: ${user.role}`);
     }
+    
+    // 🔍 DEBUG: List rooms client is in
+    const rooms = Array.from(client.rooms);
+    this.logger.log(`🔍 [DEBUG] ${user.email} is now in rooms: ${rooms.join(', ')}`);
   }
 
   emitBookingStatusChange(
@@ -230,7 +238,18 @@ export class EventsGateway
   /**
    * 🔔 NEW: Emit notification to both staff and admin
    */
-  emitToStaffAndAdmin(event: string, data: any) {
+  async emitToStaffAndAdmin(event: string, data: any) {
+    // 🔍 DEBUG: Check room sizes
+    const staffRoom = this.server.in('staff-room');
+    const adminRoom = this.server.in('admin-room');
+    
+    const staffSockets = await staffRoom.fetchSockets();
+    const adminSockets = await adminRoom.fetchSockets();
+    
+    this.logger.log(`🔍 [DEBUG] staff-room has ${staffSockets.length} clients`);
+    this.logger.log(`🔍 [DEBUG] admin-room has ${adminSockets.length} clients`);
+    this.logger.log(`🔍 [DEBUG] Emitting '${event}' with data: ${JSON.stringify(data)}`);
+    
     this.server.to('staff-room').to('admin-room').emit(event, data);
     this.logger.log(`📤 Emitted '${event}' to staff-room & admin-room`);
   }

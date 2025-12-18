@@ -43,7 +43,7 @@ interface RealtimeStatusResponse {
 }
 
 export const CourtMonitor: React.FC = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['courts', 'realtime-status'],

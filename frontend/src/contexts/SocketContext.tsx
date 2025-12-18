@@ -1,13 +1,24 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from 'react';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
 
-interface Notification {
+// ==================== TYPES ====================
+
+export type NotificationType = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+
+export interface Notification {
   id: number;
   title: string;
   message: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
-  metadata?: any;
+  type: NotificationType;
+  metadata?: Record<string, any>;
   createdAt: string;
   isRead: boolean;
 }
@@ -21,7 +32,10 @@ interface SocketContextValue {
   disconnect: () => void;
   markAsRead: (notificationId: number) => void;
   markAllAsRead: () => void;
+  refreshNotifications: () => Promise<void>;
 }
+
+// ==================== CONTEXT ====================
 
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
@@ -32,6 +46,68 @@ export const useSocket = () => {
   }
   return context;
 };
+
+// ==================== TOAST HELPERS ====================
+
+const getToastConfig = (type: string) => {
+  switch (type?.toUpperCase()) {
+    case 'SUCCESS':
+      return {
+        icon: '✅',
+        style: {
+          background: '#ECFDF5',
+          color: '#065F46',
+          border: '1px solid #10B981',
+        },
+        duration: 5000,
+      };
+    case 'WARNING':
+      return {
+        icon: '⚠️',
+        style: {
+          background: '#FFFBEB',
+          color: '#92400E',
+          border: '2px solid #F59E0B',
+          fontWeight: 'bold' as const,
+        },
+        duration: 8000,
+      };
+    case 'ERROR':
+      return {
+        icon: '❌',
+        style: {
+          background: '#FEF2F2',
+          color: '#991B1B',
+          border: '2px solid #EF4444',
+          fontWeight: 'bold' as const,
+        },
+        duration: 10000,
+      };
+    case 'INFO':
+    default:
+      return {
+        icon: 'ℹ️',
+        style: {
+          background: '#EFF6FF',
+          color: '#1E40AF',
+          border: '1px solid #3B82F6',
+        },
+        duration: 4000,
+      };
+  }
+};
+
+const playNotificationSound = () => {
+  try {
+    const audio = new Audio('/notification.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(() => {});
+  } catch (e) {
+    // Ignore audio errors
+  }
+};
+
+// ==================== PROVIDER ====================
 
 interface SocketProviderProps {
   children: React.ReactNode;
@@ -45,12 +121,46 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
-  const connect = () => {
-    const token = localStorage.getItem('token');
+  // ==================== FETCH NOTIFICATIONS ====================
+
+  const fetchNotifications = useCallback(async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      const [notifsRes, countRes] = await Promise.all([
+        fetch('http://localhost:3000/api/notifications?limit=50', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('http://localhost:3000/api/notifications/unread-count', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (notifsRes.ok) {
+        const notifs = await notifsRes.json();
+        setNotifications(notifs || []);
+      }
+
+      if (countRes.ok) {
+        const countData = await countRes.json();
+        setUnreadCount(countData.count || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  }, []);
+
+  // ==================== SOCKET CONNECTION ====================
+
+  const connect = useCallback(() => {
+    const token = localStorage.getItem('access_token');
     if (!token) {
       console.warn('❌ No token found, cannot connect to socket');
       return;
     }
+
+    console.log('🔌 Connecting to WebSocket...');
 
     const newSocket = io('http://localhost:3000/events', {
       auth: { token },
@@ -60,19 +170,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       reconnectionAttempts: maxReconnectAttempts,
     });
 
-    // Connection events
+    // ==================== CONNECTION EVENTS ====================
+
     newSocket.on('connect', () => {
       console.log('✅ Socket connected:', newSocket.id);
       setConnected(true);
       reconnectAttempts.current = 0;
-      
-      // Subscribe to notifications
       newSocket.emit('subscribe:notifications');
     });
 
-    newSocket.on('connected', (data: any) => {
-      console.log('📡 Connection confirmed:', data);
-      toast.success('Kết nối thành công!', { duration: 2000 });
+    newSocket.on('connected', (data: { userId: number; role: string }) => {
+      console.log('📡 Server confirmed:', data);
+      fetchNotifications();
     });
 
     newSocket.on('disconnect', () => {
@@ -83,62 +192,76 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     newSocket.on('connect_error', (error) => {
       console.error('❌ Connection error:', error);
       reconnectAttempts.current++;
-      
       if (reconnectAttempts.current >= maxReconnectAttempts) {
-        toast.error('Không thể kết nối đến server. Vui lòng thử lại sau.');
+        toast.error('Không thể kết nối đến server');
       }
     });
 
-    // Notification events
-    newSocket.on('notification:new', (notification: any) => {
+    // ==================== NOTIFICATION EVENTS ====================
+
+    newSocket.on('notification:new', (notification: Notification) => {
       console.log('🔔 New notification:', notification);
-      
-      // Add to list
-      setNotifications((prev) => [notification, ...prev]);
+
+      // Add to list (avoid duplicates)
+      setNotifications((prev) => {
+        const exists = prev.some((n) => n.id === notification.id);
+        if (exists) return prev;
+        return [notification, ...prev].slice(0, 100);
+      });
+
+      // Update unread count
       setUnreadCount((prev) => prev + 1);
 
-      // Play notification sound
-      try {
-        const audio = new Audio('/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {}); // Ignore if autoplay blocked
-      } catch (e) {}
+      // Play sound
+      playNotificationSound();
 
-      // Show toast based on type
-      const toastType = notification.type?.toLowerCase() || 'info';
-      const emoji = {
-        success: '✅',
-        warning: '⚠️',
-        error: '❌',
-        info: 'ℹ️',
-      }[toastType] || '🔔';
+      // Show toast
+      const config = getToastConfig(notification.type);
+      toast(
+        <div className="flex flex-col gap-1">
+          <strong className="text-sm">{notification.title}</strong>
+          <span className="text-xs opacity-80 whitespace-pre-line">
+            {notification.message}
+          </span>
+        </div>,
+        config
+      );
+    });
 
-      const message = `${emoji} ${notification.title}\n${notification.message}`;
-      
-      // High priority for warnings (cancellations)
-      if (toastType === 'warning') {
-        toast.error(message, { 
-          duration: 10000, // 10 seconds for cancellation
-          icon: '🚨',
-          style: {
-            background: '#FEF2F2',
-            color: '#991B1B',
-            border: '2px solid #F87171',
-            fontWeight: 'bold',
-          }
-        });
-      } else if (toastType === 'success') {
-        toast.success(message, { duration: 5000 });
-      } else if (toastType === 'error') {
-        toast.error(message, { duration: 6000 });
-      } else {
-        toast(message, { duration: 4000 });
+    newSocket.on(
+      'notification:marked-read',
+      (data: { notificationId: number }) => {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === data.notificationId ? { ...n, isRead: true } : n
+          )
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
       }
+    );
+
+    // ==================== BOOKING EVENTS ====================
+
+    newSocket.on('booking:created', (data: any) => {
+      console.log('📅 Booking created:', data);
+      window.dispatchEvent(new CustomEvent('booking-created', { detail: data }));
+    });
+
+    newSocket.on('booking:updated', (data: any) => {
+      console.log('📅 Booking updated:', data);
+      window.dispatchEvent(new CustomEvent('booking-updated', { detail: data }));
+    });
+
+    newSocket.on('booking:cancelled', (data: any) => {
+      console.log('📅 Booking cancelled:', data);
+      window.dispatchEvent(
+        new CustomEvent('booking-cancelled', { detail: data })
+      );
     });
 
     newSocket.on('booking:status-changed', (data: any) => {
       console.log('📦 Booking status changed:', data);
-      toast.success(`${data.message}`, { duration: 3000 });
+      toast.success(data.message, { duration: 3000 });
     });
 
     newSocket.on('booking:refund-received', (data: any) => {
@@ -147,128 +270,100 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         style: 'currency',
         currency: 'VND',
       }).format(data.refundAmount);
-      
-      toast.success(
-        `💸 Hoàn tiền ${amount} đã được chuyển vào ví của bạn!`,
-        { duration: 5000 }
-      );
+      toast.success(`💸 Hoàn tiền ${amount} đã chuyển vào ví!`, {
+        duration: 5000,
+      });
     });
 
     newSocket.on('court:status-update', (data: any) => {
       console.log('🏟️ Court status updated:', data);
-    });
-
-    newSocket.on('subscription:confirmed', (data: any) => {
-      console.log('✅ Subscription confirmed:', data);
-    });
-
-    // 📅 Real-time booking events for calendar updates
-    newSocket.on('booking:created', (data: any) => {
-      console.log('�🔔🔔 [SocketContext] RECEIVED booking:created from server:', data);
-      // Trigger a custom event that Calendar page can listen to
-      window.dispatchEvent(new CustomEvent('booking-created', { detail: data }));
-      console.log('📢 [SocketContext] Dispatched window event: booking-created');
-    });
-
-    newSocket.on('booking:updated', (data: any) => {
-      console.log('🔔🔔🔔 [SocketContext] RECEIVED booking:updated from server:', data);
-      window.dispatchEvent(new CustomEvent('booking-updated', { detail: data }));
-      console.log('📢 [SocketContext] Dispatched window event: booking-updated');
-    });
-
-    newSocket.on('booking:cancelled', (data: any) => {
-      console.log('🔔🔔🔔 [SocketContext] RECEIVED booking:cancelled from server:', data);
-      window.dispatchEvent(new CustomEvent('booking-cancelled', { detail: data }));
-      console.log('📢 [SocketContext] Dispatched window event: booking-cancelled');
+      window.dispatchEvent(
+        new CustomEvent('court-status-changed', { detail: data })
+      );
     });
 
     setSocket(newSocket);
-
     return newSocket;
-  };
+  }, [fetchNotifications]);
 
-  const disconnect = () => {
+  // ==================== DISCONNECT ====================
+
+  const disconnect = useCallback(() => {
     if (socket) {
       socket.disconnect();
       setSocket(null);
       setConnected(false);
     }
-  };
+  }, [socket]);
 
-  const markAsRead = (notificationId: number) => {
-    if (!socket) return;
+  // ==================== MARK AS READ ====================
 
-    socket.emit('notification:mark-read', { notificationId });
-    
-    // Optimistically update UI
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === notificationId ? { ...n, isRead: true } : n
-      )
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
-  };
+  const markAsRead = useCallback(
+    (notificationId: number) => {
+      if (!socket) return;
 
-  const markAllAsRead = () => {
-    // Call API to mark all as read
-    fetch('http://localhost:3000/api/notifications/read-all', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-    })
-      .then(() => {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, isRead: true }))
-        );
+      socket.emit('notification:mark-read', { notificationId });
+
+      // Optimistic update
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === notificationId ? { ...n, isRead: true } : n
+        )
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    },
+    [socket]
+  );
+
+  // ==================== MARK ALL AS READ ====================
+
+  const markAllAsRead = useCallback(async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(
+        'http://localhost:3000/api/notifications/read-all',
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
         setUnreadCount(0);
         toast.success('Đã đánh dấu tất cả là đã đọc');
-      })
-      .catch((error) => {
-        console.error('Failed to mark all as read:', error);
-        toast.error('Không thể đánh dấu đã đọc');
-      });
-  };
+      }
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+      toast.error('Không thể đánh dấu đã đọc');
+    }
+  }, []);
 
-  // Auto-connect when user is logged in
+  // ==================== AUTO-CONNECT ====================
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     if (token && !socket) {
       connect();
     }
 
-    // Cleanup on unmount
     return () => {
       disconnect();
     };
   }, []);
 
-  // Fetch initial notifications
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+  // ==================== INITIAL FETCH ====================
 
-    Promise.all([
-      fetch('http://localhost:3000/api/notifications?limit=20', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }).then((res) => res.json()),
-      fetch('http://localhost:3000/api/notifications/unread-count', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }).then((res) => res.json()),
-    ])
-      .then(([notifs, countData]) => {
-        setNotifications(notifs || []);
-        setUnreadCount(countData.count || 0);
-      })
-      .catch((error) => {
-        console.error('Failed to fetch notifications:', error);
-      });
-  }, []);
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // ==================== CONTEXT VALUE ====================
 
   const value: SocketContextValue = {
     socket,
@@ -279,6 +374,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     disconnect,
     markAsRead,
     markAllAsRead,
+    refreshNotifications: fetchNotifications,
   };
 
   return (

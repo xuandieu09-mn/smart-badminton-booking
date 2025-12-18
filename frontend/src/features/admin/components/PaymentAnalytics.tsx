@@ -15,7 +15,7 @@ const API = axios.create({
 });
 
 const PaymentAnalytics: React.FC = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['admin', 'payments'],

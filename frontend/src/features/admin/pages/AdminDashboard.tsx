@@ -24,7 +24,7 @@ export const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'bookings' | 'courts' | 'analytics'
   >('overview');
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
 
   const {
     data: stats,
@@ -41,7 +41,7 @@ export const AdminDashboard: React.FC = () => {
     enabled: !!token,
   });
 
-  const { data: bookings } = useQuery({
+  const { data: bookingsData } = useQuery({
     queryKey: ['admin', 'bookings'],
     queryFn: async () => {
       const response = await API.get('/bookings', {
@@ -51,6 +51,11 @@ export const AdminDashboard: React.FC = () => {
     },
     enabled: !!token,
   });
+
+  // Extract bookings array from response (API returns { message, total, bookings })
+  const bookings = Array.isArray(bookingsData) 
+    ? bookingsData 
+    : (bookingsData?.bookings || []);
 
   if (isLoading) {
     return (

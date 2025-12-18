@@ -38,7 +38,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem('token'),
+    localStorage.getItem('access_token'),
   );
   const [isLoading, setIsLoading] = useState(false);
 
@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const { user: userData, access_token } = response.data;
       setUser(userData);
       setToken(access_token);
-      localStorage.setItem('token', access_token);
+      localStorage.setItem('access_token', access_token);
       localStorage.setItem('user', JSON.stringify(userData));
     } finally {
       setIsLoading(false);
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const { user: userData, access_token } = response.data;
         setUser(userData);
         setToken(access_token);
-        localStorage.setItem('token', access_token);
+        localStorage.setItem('access_token', access_token);
         localStorage.setItem('user', JSON.stringify(userData));
       } finally {
         setIsLoading(false);
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('user');
   }, []);
 

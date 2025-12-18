@@ -30,7 +30,7 @@ const BookingsList: React.FC<BookingsListProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('access_token');
   const queryClient = useQueryClient();
 
   const paginatedBookings = bookings.slice(
