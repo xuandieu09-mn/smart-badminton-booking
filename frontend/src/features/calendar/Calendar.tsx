@@ -8,6 +8,7 @@ import TimelineResourceGrid, {
 } from './components/TimelineResourceGrid';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api/client';
+import { useAuthStore } from '@/store/authStore';
 import './components/TimelineResourceGrid.css';
 
 // NEW: Multi-court bulk booking data structure
@@ -23,6 +24,7 @@ export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
   // NEW: Array-based state for cross-court selection
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
@@ -302,6 +304,8 @@ export const Calendar: React.FC = () => {
             onSlotToggle={handleSlotToggle}
             selectedSlots={selectedSlots} // NEW: Pass array of selected slots
             isLoading={courtsLoading || bookingsLoading}
+            currentUserId={user?.id}
+            userRole={(user?.role as 'CUSTOMER' | 'STAFF' | 'ADMIN') || 'CUSTOMER'}
           />
         </div>
 

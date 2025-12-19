@@ -9,6 +9,7 @@ import { CalendarPage } from '../features/calendar/pages/CalendarPage';
 import { BookingPage } from '../features/booking/pages/BookingPage';
 import MyBookingsPage from '../features/booking/pages/MyBookingsPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
+import TransactionHistory from '../features/dashboard/pages/TransactionHistory';
 import SettingsPage from '../features/settings/pages/SettingsPage';
 import AdminLayout from '../features/admin/components/AdminLayout';
 import AdminDashboard from '../features/admin/pages/AdminDashboard';
@@ -139,6 +140,10 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <CustomerDashboard />,
+      },
+      {
+        path: 'transaction-history',
+        element: <TransactionHistory />,
       },
       {
         path: 'settings',

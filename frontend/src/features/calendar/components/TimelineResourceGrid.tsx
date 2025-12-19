@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { parseISO, differenceInMinutes, format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 import { Court } from '../../../types/court.types';
 import './TimelineResourceGrid.css';
 
@@ -8,10 +9,16 @@ export interface TimelineBooking {
   courtId: number;
   startTime: string; // ISO datetime
   endTime: string; // ISO datetime
-  status: 'PENDING_PAYMENT' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | string;
+  status: 'PENDING_PAYMENT' | 'CONFIRMED' | 'CHECKED_IN' | 'COMPLETED' | 'CANCELLED' | string;
   paymentStatus?: 'PAID' | 'UNPAID' | 'PENDING';
   bookingCode?: string;
   expiresAt?: string | null; // ISO datetime for PENDING_PAYMENT countdown
+  // Booking details for preview
+  userId?: number;
+  user?: { id: number; name?: string; email: string; phone?: string };
+  guestName?: string;
+  guestPhone?: string;
+  totalPrice?: number;
 }
 
 // NEW: Selected slot type for bulk booking
@@ -23,6 +30,13 @@ type SelectedSlot = {
   price: number;
 };
 
+// Booking preview modal data
+interface BookingPreviewData {
+  booking: TimelineBooking;
+  courtName: string;
+  style: { bg: string; text: string; label: string };
+}
+
 interface TimelineResourceGridProps {
   courts: Court[];
   bookings: TimelineBooking[];
@@ -32,6 +46,9 @@ interface TimelineResourceGridProps {
   selectedSlots?: SelectedSlot[]; // NEW: Array of selected slots
   onSlotToggle?: (courtId: number, startTime: Date) => void;
   isLoading?: boolean;
+  // NEW: User info for permission control
+  currentUserId?: number;
+  userRole?: 'CUSTOMER' | 'STAFF' | 'ADMIN';
 }
 
 const DEFAULT_START_HOUR = 6;
@@ -49,6 +66,7 @@ const getBookingStyle = (booking: TimelineBooking) => {
     { bg: string; text: string; label: string }
   > = {
     CONFIRMED: { bg: '#ef4444', text: '#ffffff', label: 'Đã đặt' }, // Red
+    CHECKED_IN: { bg: '#3b82f6', text: '#ffffff', label: 'Đang chơi' }, // Blue - Playing
     PENDING_PAYMENT: {
       bg: '#f59e0b',
       text: '#ffffff',
@@ -84,11 +102,40 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
   selectedSlots = [], // NEW: Array-based selected slots
   onSlotToggle,
   isLoading = false,
+  currentUserId,
+  userRole = 'CUSTOMER',
 }) => {
   const [hoveredSlot, setHoveredSlot] = useState<{
     courtId: number;
     hour: number;
   } | null>(null);
+
+  // NEW: State for booking preview modal
+  const [previewBooking, setPreviewBooking] = useState<BookingPreviewData | null>(null);
+
+  // Check if user can view booking details
+  const canViewBooking = (booking: TimelineBooking): boolean => {
+    // Staff and Admin can view all bookings
+    if (userRole === 'STAFF' || userRole === 'ADMIN') {
+      return true;
+    }
+    // Customer can only view their own bookings
+    if (userRole === 'CUSTOMER' && currentUserId) {
+      return booking.userId === currentUserId || booking.user?.id === currentUserId;
+    }
+    return false;
+  };
+
+  // Handle booking click
+  const handleBookingClick = (block: typeof bookingBlocks[0], courtName: string) => {
+    if (canViewBooking(block.rawBooking)) {
+      setPreviewBooking({
+        booking: block.rawBooking,
+        courtName,
+        style: block.style,
+      });
+    }
+  };
 
   // Tạo danh sách giờ từ startHour đến endHour
   const hours = useMemo(() => {
@@ -285,10 +332,12 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                   ))}
 
                   {/* Booking blocks */}
-                  {getCourtBookings(court.id).map((block) => (
+                  {getCourtBookings(court.id).map((block) => {
+                    const isClickable = canViewBooking(block.rawBooking);
+                    return (
                     <div
                       key={`booking-${block.id}`}
-                      className="timeline-booking-block"
+                      className={`timeline-booking-block ${isClickable ? 'cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-white hover:ring-offset-1' : 'cursor-not-allowed'}`}
                       style={{
                         left: block.leftPx,
                         width: Math.max(block.widthPx, 30), // Min width to show label
@@ -297,7 +346,10 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                         height: ROW_HEIGHT_PX * 0.8,
                         top: ROW_HEIGHT_PX * 0.1,
                       }}
-                      title={`${block.style.label} - ${block.durationMinutes}min${
+                      onClick={() => handleBookingClick(block, court.name)}
+                      title={isClickable 
+                        ? `🔍 Click để xem chi tiết - ${block.style.label}`
+                        : `${block.style.label} - ${block.durationMinutes}min${
                         block.style.remainingSeconds
                           ? ` (${Math.ceil(block.style.remainingSeconds / 60)}p còn lại)`
                           : ''
@@ -323,7 +375,7 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                         )}
                       </div>
                     </div>
-                  ))}
+                  );})}
 
                   {/* NEW: Multi-slot selection highlights - render all selected slots */}
                   {selectedSlots
@@ -389,6 +441,13 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
           <div className="legend-item">
             <div
               className="legend-color"
+              style={{ backgroundColor: '#3b82f6' }}
+            ></div>
+            <span>Đang chơi</span>
+          </div>
+          <div className="legend-item">
+            <div
+              className="legend-color"
               style={{ backgroundColor: '#f59e0b' }}
             ></div>
             <span>Chờ thanh toán</span>
@@ -416,6 +475,128 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
               }}
             ></div>
             <span>Trống</span>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Preview Modal */}
+      {previewBooking && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setPreviewBooking(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div 
+              className="px-6 py-4 text-white"
+              style={{ backgroundColor: previewBooking.style.bg }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold">
+                    🏸 {previewBooking.courtName}
+                  </h3>
+                  <p className="text-sm opacity-90">{previewBooking.style.label}</p>
+                </div>
+                <button 
+                  onClick={() => setPreviewBooking(null)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-4 space-y-4">
+              {/* Booking Code */}
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">🎫</span>
+                <div>
+                  <p className="text-xs text-gray-500">Mã đặt sân</p>
+                  <p className="font-mono font-bold text-lg text-gray-900">
+                    {previewBooking.booking.bookingCode || `#${previewBooking.booking.id}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Customer Info */}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">👤</span>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Tên khách hàng</p>
+                    <p className="font-semibold text-gray-900">
+                      {previewBooking.booking.guestName || 
+                       previewBooking.booking.user?.name || 
+                       'Chưa có thông tin'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">📞</span>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Số điện thoại</p>
+                    <p className="font-semibold text-gray-900">
+                      {previewBooking.booking.guestPhone || 
+                       previewBooking.booking.user?.phone || 
+                       'Chưa có thông tin'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">⏰</span>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Thời gian chơi</p>
+                    <p className="font-semibold text-gray-900">
+                      {format(parseISO(previewBooking.booking.startTime), 'HH:mm')} - {format(parseISO(previewBooking.booking.endTime), 'HH:mm')}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {format(parseISO(previewBooking.booking.startTime), 'EEEE, dd/MM/yyyy', { locale: vi })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">💰</span>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Số tiền</p>
+                    <p className="font-bold text-xl text-green-600">
+                      {previewBooking.booking.totalPrice 
+                        ? new Intl.NumberFormat('vi-VN', {
+                            style: 'currency',
+                            currency: 'VND',
+                          }).format(Number(previewBooking.booking.totalPrice))
+                        : 'Chưa có thông tin'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {previewBooking.booking.paymentStatus === 'PAID' 
+                        ? '✅ Đã thanh toán' 
+                        : previewBooking.booking.paymentStatus === 'UNPAID'
+                        ? '⏳ Chưa thanh toán'
+                        : ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t">
+              <button
+                onClick={() => setPreviewBooking(null)}
+                className="w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

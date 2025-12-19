@@ -577,6 +577,17 @@ export class BookingsService {
         paymentStatus: true,
         bookingCode: true,
         expiresAt: true,
+        totalPrice: true,
+        userId: true,
+        guestName: true,
+        guestPhone: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
       orderBy: {
         startTime: 'asc',
@@ -1057,7 +1068,21 @@ export class BookingsService {
 
     // �🔔 Notify staff & admin about cancellation
     try {
-      await this.notificationsService.notifyBookingCancelled(booking);
+      // Get updated wallet balance after refund
+      let walletBalance = 0;
+      if (booking.userId) {
+        const wallet = await this.prisma.wallet.findUnique({
+          where: { userId: booking.userId },
+        });
+        walletBalance = wallet ? Number(wallet.balance) : 0;
+      }
+
+      // Send cancellation notification with refund info
+      await this.notificationsService.notifyBookingCancelled(booking, {
+        refundAmount: Number(refundAmount),
+        refundPercentage,
+        walletBalance,
+      });
     } catch (error) {
       this.logger.error(`Failed to send cancellation notification: ${error.message}`);
     }

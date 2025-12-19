@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { Role } from '@prisma/client';
 
@@ -19,8 +20,15 @@ export class RegisterDto {
   password: string;
 
   @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsString()
   @IsOptional()
-  name?: string;
+  @Matches(/^(0|\+84)[0-9]{9,10}$/, {
+    message: 'Phone number must be a valid Vietnamese phone number',
+  })
+  phone?: string;
 
   @IsEnum(Role)
   @IsOptional()

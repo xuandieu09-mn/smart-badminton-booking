@@ -456,18 +456,45 @@ export class NotificationsService {
   /**
    * ⚠️ #3b: Notify CUSTOMER about their cancellation
    */
-  async notifyCustomerBookingCancelled(booking: BookingData): Promise<void> {
+  async notifyCustomerBookingCancelled(
+    booking: BookingData,
+    refundInfo?: {
+      refundAmount: number;
+      refundPercentage: number;
+      walletBalance: number;
+    },
+  ): Promise<void> {
     if (!booking.userId) return;
+
+    let message = `Hủy thành công đơn #${booking.bookingCode}.`;
+    let title = 'ℹ️ Đã hủy lịch';
+    let notificationType = NotificationType.INFO;
+
+    if (refundInfo && refundInfo.refundAmount > 0) {
+      const refundAmountStr = this.formatCurrency(refundInfo.refundAmount);
+      const walletBalanceStr = this.formatCurrency(refundInfo.walletBalance);
+      
+      title = '💸 Đã hủy lịch & hoàn tiền';
+      message = `Hủy thành công đơn #${booking.bookingCode}. Hoàn ${refundInfo.refundPercentage}% (${refundAmountStr}) vào ví. Số dư hiện tại: ${walletBalanceStr}.`;
+      notificationType = NotificationType.SUCCESS;
+    } else if (refundInfo && refundInfo.refundPercentage === 0) {
+      title = '⚠️ Đã hủy lịch - Không hoàn tiền';
+      message = `Hủy thành công đơn #${booking.bookingCode}. Không được hoàn tiền do hủy muộn (<12h trước giờ chơi).`;
+      notificationType = NotificationType.WARNING;
+    }
 
     await this.createAndEmitNotification({
       userId: booking.userId,
-      title: 'ℹ️ Đã hủy lịch',
-      message: `Hủy thành công đơn #${booking.bookingCode}.`,
-      type: NotificationType.INFO,
+      title,
+      message,
+      type: notificationType,
       metadata: {
         event: 'BOOKING_CANCELLED_BY_USER',
         bookingId: booking.id,
         bookingCode: booking.bookingCode,
+        refundAmount: refundInfo?.refundAmount || 0,
+        refundPercentage: refundInfo?.refundPercentage || 0,
+        walletBalance: refundInfo?.walletBalance || 0,
       },
     });
   }
@@ -475,10 +502,17 @@ export class NotificationsService {
   /**
    * ⚠️ #3 COMBINED: Booking Cancelled Event
    */
-  async notifyBookingCancelled(booking: BookingData): Promise<void> {
+  async notifyBookingCancelled(
+    booking: BookingData,
+    refundInfo?: {
+      refundAmount: number;
+      refundPercentage: number;
+      walletBalance: number;
+    },
+  ): Promise<void> {
     this.logger.log(`⚠️ notifyBookingCancelled: #${booking.bookingCode}`);
     await this.notifyStaffBookingCancelled(booking);
-    await this.notifyCustomerBookingCancelled(booking);
+    await this.notifyCustomerBookingCancelled(booking, refundInfo);
   }
 
   // ============================================================

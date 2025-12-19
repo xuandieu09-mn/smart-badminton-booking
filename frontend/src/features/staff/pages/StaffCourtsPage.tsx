@@ -329,6 +329,7 @@ paymentMethod
             onSlotToggle={handleSlotToggle}
             selectedSlots={selectedSlots}
             isLoading={courtsLoading || bookingsLoading}
+            userRole="STAFF"
           />
         </div>
 
