@@ -10,8 +10,17 @@ services:
     ports:
       - "5433:5432"
     volumes:
+      # ✅ Named volume for persistent data (survives container restart)
       - postgres_data:/var/lib/postgresql/data
+      # ✅ Optional: Backup folder mapped to host machine
+      - ./backups/postgres:/backups
     restart: always
+    # ✅ Health check to ensure database is ready
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d badminton_booking"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -23,6 +32,10 @@ services:
     volumes:
       - redis_data:/data
 
+# ✅ Named volumes - Data persists even when containers are removed
+# ⚠️ WARNING: Only "docker-compose down -v" or "docker volume rm" will delete this data
 volumes:
   postgres_data:
+    name: badminton_postgres_data  # Explicit name to avoid confusion
   redis_data:
+    name: badminton_redis_data

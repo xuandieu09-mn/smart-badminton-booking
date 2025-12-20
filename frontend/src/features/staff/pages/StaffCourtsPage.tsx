@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { useCourts } from '../../calendar/hooks/useCourts';
 import { useAllCourtBookingsByDate } from '../../calendar/hooks/useCourtBookings';
 import TimelineResourceGrid, {
@@ -7,6 +7,7 @@ import TimelineResourceGrid, {
 } from '../../calendar/components/TimelineResourceGrid';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../../services/api/client';
+import HybridDatePicker from '@/components/common/HybridDatePicker';
 import '../../calendar/components/TimelineResourceGrid.css';
 
 type SelectedSlot = {
@@ -283,39 +284,14 @@ paymentMethod
           </p>
         </div>
 
-        {/* Date Selector */}
-        <div className="mb-6 bg-white rounded-lg shadow p-4 md:p-6">
-          <label className="block text-sm font-bold text-gray-700 mb-3">
-            📅 Chọn ngày:
-          </label>
-          <input
-            type="date"
-            value={format(selectedDate, 'yyyy-MM-dd')}
-            onChange={(e) => setSelectedDate(new Date(e.target.value))}
-            min={format(new Date(), 'yyyy-MM-dd')}
-            className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+        {/* New Hybrid Date Picker - Staff Mode */}
+        <div className="mb-6">
+          <HybridDatePicker
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            allowPast={false}
+            maxFutureDays={14}
           />
-
-          <div className="mt-4 flex items-center gap-2 overflow-x-auto">
-            {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-              <button
-                key={day}
-                onClick={() => setSelectedDate(addDays(new Date(), day))}
-                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${
-                  format(selectedDate, 'yyyy-MM-dd') ===
-                  format(addDays(new Date(), day), 'yyyy-MM-dd')
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                }`}
-              >
-                {day === 0
-                  ? 'Hôm nay'
-                  : day === 1
-                    ? 'Ngày mai'
-                    : 'T' + (2 + day)}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Timeline Grid */}

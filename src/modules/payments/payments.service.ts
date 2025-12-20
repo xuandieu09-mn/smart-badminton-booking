@@ -43,7 +43,9 @@ export class PaymentsService {
 
     // 🚫 MAINTENANCE bookings don't need payment
     if (booking.type === 'MAINTENANCE') {
-      throw new BadRequestException('Cannot create payment for maintenance bookings');
+      throw new BadRequestException(
+        'Cannot create payment for maintenance bookings',
+      );
     }
 
     if (booking.totalPrice === null) {
@@ -155,12 +157,13 @@ export class PaymentsService {
         },
       });
 
-      // Update booking status
+      // Update booking status AND paidAmount
       const confirmedBooking = await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: 'CONFIRMED',
           paymentStatus: 'PAID',
+          paidAmount: booking.totalPrice, // ✅ FIX: Track actual paid amount
         },
       });
 
@@ -258,14 +261,18 @@ export class PaymentsService {
 
     // �🔔 Send payment notification to all parties
     try {
-      this.logger.log(`📤 Calling notifyPaymentSuccess for booking #${booking.bookingCode}...`);
+      this.logger.log(
+        `📤 Calling notifyPaymentSuccess for booking #${booking.bookingCode}...`,
+      );
       await this.notificationsService.notifyPaymentSuccess(
         result.payment,
         result.booking,
       );
       this.logger.log(`✅ Payment notification sent`);
     } catch (error) {
-      this.logger.error(`❌ Failed to send payment notification: ${error.message}`);
+      this.logger.error(
+        `❌ Failed to send payment notification: ${error.message}`,
+      );
       this.logger.error(error.stack);
     }
 
@@ -436,7 +443,9 @@ export class PaymentsService {
 
     // 🚫 MAINTENANCE bookings don't need payment
     if (booking.type === 'MAINTENANCE') {
-      throw new BadRequestException('Cannot create payment URL for maintenance bookings');
+      throw new BadRequestException(
+        'Cannot create payment URL for maintenance bookings',
+      );
     }
 
     if (booking.userId !== userId) {
@@ -540,12 +549,13 @@ export class PaymentsService {
         },
       });
 
-      // Update booking
+      // Update booking AND paidAmount
       const updatedBooking = await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: 'CONFIRMED',
           paymentStatus: 'PAID',
+          paidAmount: booking.totalPrice, // ✅ FIX: Track actual paid amount for VNPay
         },
       });
 
@@ -631,7 +641,9 @@ export class PaymentsService {
         result.booking,
       );
     } catch (error) {
-      this.logger.error(`Failed to send VNPay payment notification: ${error.message}`);
+      this.logger.error(
+        `Failed to send VNPay payment notification: ${error.message}`,
+      );
     }
 
     return {

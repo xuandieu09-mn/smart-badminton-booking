@@ -18,6 +18,7 @@ interface Booking {
   startTime: string;
   endTime: string;
   totalPrice: number;
+  paidAmount: number; // ✅ Added: Track amount actually paid
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -93,7 +94,7 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
   const [newStartTime, setNewStartTime] = useState('');
   const [newEndTime, setNewEndTime] = useState('');
   const [recalculatePrice, setRecalculatePrice] = useState(true);
-  const [chargeExtraToWallet, setChargeExtraToWallet] = useState(false);
+  // NOTE: chargeExtraToWallet removed - extra payment collected at venue
   
   // Court transfer
   const [newCourtId, setNewCourtId] = useState<number | null>(null);
@@ -195,7 +196,6 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
       startTime: new Date(newStartTime).toISOString(),
       endTime: new Date(newEndTime).toISOString(),
       recalculatePrice,
-      chargeExtraToWallet,
       forceOverwrite,
       adminNote: adminNote || 'Admin time adjustment',
     };
@@ -350,8 +350,8 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
                   <p className="text-lg font-bold text-gray-900 mt-1">{court.name}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Tổng tiền</label>
-                  <p className="text-lg font-bold text-green-600 mt-1">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Giá hiện tại</label>
+                  <p className="text-lg font-bold text-gray-900 mt-1">
                     {new Intl.NumberFormat('vi-VN').format(booking.totalPrice)}đ
                   </p>
                 </div>
@@ -368,6 +368,55 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* Payment Status Card */}
+              {(() => {
+                const pendingAmount = booking.totalPrice - (booking.paidAmount || 0);
+                const isFullyPaid = pendingAmount <= 0;
+                
+                return (
+                  <div className={`rounded-lg p-4 border-2 ${
+                    isFullyPaid 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-amber-50 border-amber-200'
+                  }`}>
+                    <h3 className={`font-bold mb-3 flex items-center gap-2 ${
+                      isFullyPaid ? 'text-green-900' : 'text-amber-900'
+                    }`}>
+                      <span>{isFullyPaid ? '✅' : '💰'}</span>
+                      <span>Tình trạng thanh toán</span>
+                    </h3>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-500">Đã thanh toán</p>
+                        <p className="font-bold text-green-600 text-lg">
+                          {new Intl.NumberFormat('vi-VN').format(booking.paidAmount || 0)}đ
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Tổng giá</p>
+                        <p className="font-bold text-gray-900 text-lg">
+                          {new Intl.NumberFormat('vi-VN').format(booking.totalPrice)}đ
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Còn thiếu</p>
+                        <p className={`font-bold text-lg ${pendingAmount > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                          {pendingAmount > 0 
+                            ? `${new Intl.NumberFormat('vi-VN').format(pendingAmount)}đ`
+                            : '0đ ✓'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    {pendingAmount > 0 && (
+                      <p className="text-amber-700 text-sm mt-3 bg-amber-100 rounded px-3 py-2">
+                        💡 Thu thêm {new Intl.NumberFormat('vi-VN').format(pendingAmount)}đ khi khách đến sân
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Customer Info */}
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -573,15 +622,13 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
                   />
                   <span className="text-gray-700">Tính lại giá tự động</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={chargeExtraToWallet}
-                    onChange={(e) => setChargeExtraToWallet(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded"
-                  />
-                  <span className="text-gray-700">Trừ tiền thêm từ ví (nếu kéo dài)</span>
-                </label>
+                
+                {/* Info about extra payment collection */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                  <p className="text-blue-800">
+                    <span className="font-bold">💡 Lưu ý:</span> Nếu kéo dài thời gian, tiền thêm sẽ được thu khi khách đến sân (tiền mặt/chuyển khoản).
+                  </p>
+                </div>
               </div>
 
               {/* Admin Note */}
@@ -696,11 +743,15 @@ const AdminBookingModal: React.FC<AdminBookingModalProps> = ({
                     checked={refundToWallet}
                     onChange={(e) => setRefundToWallet(e.target.checked)}
                     className="w-5 h-5 text-red-600 rounded"
+                    disabled={!booking.userId} // Disable for guest bookings
                   />
                   <div>
                     <span className="font-medium text-gray-900">Hoàn tiền về ví khách</span>
                     <p className="text-sm text-gray-500">
-                      Hoàn {new Intl.NumberFormat('vi-VN').format(booking.totalPrice)}đ về ví
+                      {booking.userId 
+                        ? `Hoàn ${new Intl.NumberFormat('vi-VN').format(booking.paidAmount || 0)}đ về ví (số tiền đã thanh toán)`
+                        : '❌ Khách vãng lai không có ví'
+                      }
                     </p>
                   </div>
                 </label>

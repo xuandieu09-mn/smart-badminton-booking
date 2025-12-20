@@ -279,4 +279,35 @@ export class BookingsController {
       body.reason,
     );
   }
+
+  // ==================== PAYMENT COLLECTION ====================
+
+  /**
+   * 💵 Collect Extra Payment (Staff/Admin)
+   * When booking time was extended, collect the pending extra amount
+   */
+  @Post(':id/collect-payment')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async collectExtraPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { paymentMethod: 'CASH' | 'BANK_TRANSFER'; amount?: number },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.collectExtraPayment(
+      id,
+      user.id,
+      body.paymentMethod,
+      body.amount,
+    );
+  }
+
+  /**
+   * 📊 Get Booking Payment Status
+   * Check how much has been paid vs pending
+   */
+  @Get(':id/payment-status')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getBookingPaymentStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingsService.getBookingPaymentStatus(id);
+  }
 }

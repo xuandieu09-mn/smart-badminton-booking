@@ -2,7 +2,11 @@ import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES, JOB_NAMES } from '../queue/constants/queue.constants';
-import { CreateBookingDto, AdminUpdateBookingDto, AdminUpdateResult } from './dto';
+import {
+  CreateBookingDto,
+  AdminUpdateBookingDto,
+  AdminUpdateResult,
+} from './dto';
 import {
   BookingStatus,
   BookingType,
@@ -105,8 +109,8 @@ export class BookingsService {
     const isMaintenance = bookingType === BookingType.MAINTENANCE;
 
     // 5️⃣ Calculate total price (MAINTENANCE = 0)
-    const totalPrice = isMaintenance 
-      ? new Decimal(0) 
+    const totalPrice = isMaintenance
+      ? new Decimal(0)
       : await this.calculatePrice(courtId, start, end);
 
     // 6️⃣ Generate booking code
@@ -147,14 +151,24 @@ export class BookingsService {
           bookingCode,
           courtId,
           userId: finalUserId, // ✅ null for maintenance/guest
-          guestName: isMaintenance ? 'MAINTENANCE' : (isGuestBooking ? guestName : null),
-          guestPhone: isMaintenance ? dto.guestPhone || 'System maintenance' : (isGuestBooking ? guestPhone : null),
+          guestName: isMaintenance
+            ? 'MAINTENANCE'
+            : isGuestBooking
+              ? guestName
+              : null,
+          guestPhone: isMaintenance
+            ? dto.guestPhone || 'System maintenance'
+            : isGuestBooking
+              ? guestPhone
+              : null,
           startTime: start,
           endTime: end,
           totalPrice,
+          paidAmount:
+            finalPaymentStatus === PaymentStatus.PAID ? totalPrice : 0, // ✅ Track amount actually paid
           status,
           type: bookingType,
-          paymentMethod: isMaintenance ? null : (paymentMethod || null),
+          paymentMethod: isMaintenance ? null : paymentMethod || null,
           paymentStatus: finalPaymentStatus,
           createdBy:
             userRole === Role.STAFF || userRole === Role.ADMIN
@@ -219,11 +233,15 @@ export class BookingsService {
     // �🔔 Send notification to staff/admin about new booking (if not maintenance)
     if (!isMaintenance) {
       try {
-        this.logger.log(`📤 Calling notifyNewBooking for #${booking.bookingCode}...`);
+        this.logger.log(
+          `📤 Calling notifyNewBooking for #${booking.bookingCode}...`,
+        );
         await this.notificationsService.notifyNewBooking(booking);
         this.logger.log(`✅ Notification sent successfully`);
       } catch (error) {
-        this.logger.error(`❌ Failed to send new booking notification: ${error.message}`);
+        this.logger.error(
+          `❌ Failed to send new booking notification: ${error.message}`,
+        );
         this.logger.error(error.stack);
       }
     }
@@ -348,6 +366,8 @@ export class BookingsService {
             startTime: start,
             endTime: end,
             totalPrice,
+            paidAmount:
+              status === BookingStatus.CONFIRMED ? totalPrice : 0, // ✅ FIX: Track amount actually paid
             status,
             type: bookingType,
             paymentMethod: dto.paymentMethod || null,
@@ -403,13 +423,17 @@ export class BookingsService {
       this.eventsGateway.broadcastNewBooking(booking);
     }
 
-    this.logger.log(`📅 Bulk booking created: ${createdBookings.length} bookings broadcasted`);
+    this.logger.log(
+      `📅 Bulk booking created: ${createdBookings.length} bookings broadcasted`,
+    );
 
     // 🔔 Send notifications to Staff/Admin for each booking
     for (const booking of createdBookings) {
       if (booking.type !== 'MAINTENANCE') {
         try {
-          this.logger.log(`📤 [BULK] Calling notifyNewBooking for #${booking.bookingCode}...`);
+          this.logger.log(
+            `📤 [BULK] Calling notifyNewBooking for #${booking.bookingCode}...`,
+          );
           await this.notificationsService.notifyNewBooking(booking);
         } catch (error) {
           this.logger.error(`❌ [BULK] Failed to notify: ${error.message}`);
@@ -578,6 +602,7 @@ export class BookingsService {
         bookingCode: true,
         expiresAt: true,
         totalPrice: true,
+        paidAmount: true, // ✅ FIX: Include paidAmount for payment status display
         userId: true,
         guestName: true,
         guestPhone: true,
@@ -628,6 +653,7 @@ export class BookingsService {
         bookingCode: true,
         expiresAt: true,
         totalPrice: true,
+        paidAmount: true, // ✅ FIX: Include paidAmount for payment status display
         userId: true,
         guestName: true,
         guestPhone: true,
@@ -775,7 +801,9 @@ export class BookingsService {
     try {
       await this.notificationsService.notifyCheckInSuccess(updatedBooking);
     } catch (error) {
-      this.logger.error(`Failed to send check-in notification: ${error.message}`);
+      this.logger.error(
+        `Failed to send check-in notification: ${error.message}`,
+      );
     }
 
     return updatedBooking;
@@ -913,8 +941,10 @@ export class BookingsService {
         refundReason = 'No refund (cancelled <12h before)';
       }
 
+      // ✅ FIXED: Refund based on paidAmount, NOT totalPrice
+      // If admin extended time without charging, we only refund what was actually paid
       refundAmount = new Decimal(
-        (Number(booking.totalPrice) * refundPercentage) / 100,
+        (Number(booking.paidAmount) * refundPercentage) / 100,
       );
     }
 
@@ -1064,7 +1094,10 @@ export class BookingsService {
         });
 
         // 🔔 Send proper refund notification
-        await this.notificationsService.notifyRefund(booking, Number(refundAmount));
+        await this.notificationsService.notifyRefund(
+          booking,
+          Number(refundAmount),
+        );
       }
 
       this.eventsGateway.broadcastCourtStatusUpdate(
@@ -1098,7 +1131,9 @@ export class BookingsService {
         walletBalance,
       });
     } catch (error) {
-      this.logger.error(`Failed to send cancellation notification: ${error.message}`);
+      this.logger.error(
+        `Failed to send cancellation notification: ${error.message}`,
+      );
     }
 
     return {
@@ -1140,7 +1175,9 @@ export class BookingsService {
 
     // 2️⃣ Handle Time Override
     if (dto.startTime || dto.endTime) {
-      const newStartTime = dto.startTime ? new Date(dto.startTime) : booking.startTime;
+      const newStartTime = dto.startTime
+        ? new Date(dto.startTime)
+        : booking.startTime;
       const newEndTime = dto.endTime ? new Date(dto.endTime) : booking.endTime;
 
       if (newStartTime >= newEndTime) {
@@ -1183,7 +1220,9 @@ export class BookingsService {
             where: { id: conflict.id },
             data: { status: BookingStatus.CANCELLED },
           });
-          this.logger.warn(`🔨 Admin force cancelled booking #${conflict.bookingCode}`);
+          this.logger.warn(
+            `🔨 Admin force cancelled booking #${conflict.bookingCode}`,
+          );
         }
       }
 
@@ -1213,7 +1252,9 @@ export class BookingsService {
       }
 
       // Check for conflicts on new court
-      const newStart = dto.startTime ? new Date(dto.startTime) : booking.startTime;
+      const newStart = dto.startTime
+        ? new Date(dto.startTime)
+        : booking.startTime;
       const newEnd = dto.endTime ? new Date(dto.endTime) : booking.endTime;
 
       const courtConflicts = await this.prisma.booking.findMany({
@@ -1260,17 +1301,22 @@ export class BookingsService {
       updateData.status = dto.status;
 
       // If cancelling with refund option
-      if (dto.status === BookingStatus.CANCELLED && dto.refundToWallet && booking.userId) {
-        const refundAmount = Number(booking.totalPrice);
+      if (
+        dto.status === BookingStatus.CANCELLED &&
+        dto.refundToWallet &&
+        booking.userId
+      ) {
+        // ✅ FIXED: Refund based on paidAmount, NOT totalPrice
+        const refundAmount = Number(booking.paidAmount);
 
         await this.prisma.$transaction(async (tx) => {
           const wallet = await tx.wallet.findUnique({
-            where: { userId: booking.userId! },
+            where: { userId: booking.userId },
           });
 
           if (wallet) {
             await tx.wallet.update({
-              where: { userId: booking.userId! },
+              where: { userId: booking.userId },
               data: { balance: { increment: refundAmount } },
             });
 
@@ -1288,46 +1334,39 @@ export class BookingsService {
           }
         });
 
-        this.logger.log(`💰 Admin refunded ${refundAmount} to user #${booking.userId}`);
+        this.logger.log(
+          `💰 Admin refunded ${refundAmount} (paidAmount) to user #${booking.userId}`,
+        );
       }
     }
 
-    // 5️⃣ Handle price difference (charge extra or refund)
-    if (priceDifference !== 0 && booking.userId) {
-      await this.prisma.$transaction(async (tx) => {
-        const wallet = await tx.wallet.findUnique({
-          where: { userId: booking.userId! },
-        });
+    // 5️⃣ Handle price difference
+    // NEW LOGIC:
+    // - If price increased (extension): Don't auto-charge, let staff collect payment at venue
+    // - If price decreased (shortened): Refund to wallet if member has wallet
+    // - paidAmount stays unchanged for extension (pending extra payment)
+    // - paidAmount decreases for shortening (refund)
 
-        if (wallet) {
-          if (priceDifference > 0 && dto.chargeExtraToWallet) {
-            // Extension: Charge extra from wallet
-            if (Number(wallet.balance) < priceDifference) {
-              throw new BadRequestException(`Insufficient wallet balance. Need ${priceDifference} VND`);
-            }
+    if (priceDifference !== 0) {
+      if (priceDifference > 0) {
+        // ✅ EXTENSION: Price increased, pending extra payment
+        // Don't auto-charge - staff will collect at venue (cash/transfer)
+        // paidAmount stays the same - unpaid extra = totalPrice - paidAmount
+        this.logger.log(
+          `⏳ Booking #${booking.bookingCode} extended. Extra ${priceDifference} VND pending collection at venue.`,
+        );
+      } else if (priceDifference < 0 && booking.userId) {
+        // ✅ SHORTENED: Refund difference to wallet (only for members)
+        const refundAmount = Math.abs(priceDifference);
 
+        await this.prisma.$transaction(async (tx) => {
+          const wallet = await tx.wallet.findUnique({
+            where: { userId: booking.userId },
+          });
+
+          if (wallet) {
             await tx.wallet.update({
-              where: { userId: booking.userId! },
-              data: { balance: { decrement: priceDifference } },
-            });
-
-            await tx.walletTransaction.create({
-              data: {
-                walletId: wallet.id,
-                type: 'PAYMENT',
-                amount: -priceDifference,
-                bookingId: booking.id,
-                description: `Extra charge - Time extension for #${booking.bookingCode}`,
-                balanceBefore: Number(wallet.balance),
-                balanceAfter: Number(wallet.balance) - priceDifference,
-              },
-            });
-          } else if (priceDifference < 0) {
-            // Shortened: Refund the difference
-            const refundAmount = Math.abs(priceDifference);
-
-            await tx.wallet.update({
-              where: { userId: booking.userId! },
+              where: { userId: booking.userId },
               data: { balance: { increment: refundAmount } },
             });
 
@@ -1342,9 +1381,18 @@ export class BookingsService {
                 balanceAfter: Number(wallet.balance) + refundAmount,
               },
             });
+
+            // ✅ Update paidAmount since we refunded
+            updateData.paidAmount = new Decimal(
+              Number(booking.paidAmount) - refundAmount,
+            );
+
+            this.logger.log(
+              `💰 Refunded ${refundAmount} VND to user #${booking.userId} for shortened booking`,
+            );
           }
-        }
-      });
+        });
+      }
     }
 
     // 6️⃣ Update booking
@@ -1392,28 +1440,37 @@ export class BookingsService {
     this.eventsGateway.broadcast('booking:updated', {
       bookingId: updatedBooking.id,
       courtId: updatedBooking.courtId,
-      oldCourtId: booking.courtId !== updatedBooking.courtId ? booking.courtId : undefined,
+      oldCourtId:
+        booking.courtId !== updatedBooking.courtId
+          ? booking.courtId
+          : undefined,
     });
 
     return {
       success: true,
       message: '✅ Booking updated successfully',
       booking: updatedBooking,
-      priceChange: priceDifference !== 0 ? {
-        oldPrice,
-        newPrice,
-        difference: priceDifference,
-        refunded: priceDifference < 0,
-        charged: priceDifference > 0 && dto.chargeExtraToWallet,
-      } : undefined,
-      conflicts: conflictingBookings.length > 0 ? conflictingBookings.map((c) => ({
-        bookingId: c.id,
-        bookingCode: c.bookingCode,
-        startTime: c.startTime.toISOString(),
-        endTime: c.endTime.toISOString(),
-        status: c.status,
-        overwritten: dto.forceOverwrite,
-      })) : undefined,
+      priceChange:
+        priceDifference !== 0
+          ? {
+              oldPrice,
+              newPrice,
+              difference: priceDifference,
+              refunded: priceDifference < 0,
+              pendingCollection: priceDifference > 0, // Extra payment to be collected at venue
+            }
+          : undefined,
+      conflicts:
+        conflictingBookings.length > 0
+          ? conflictingBookings.map((c) => ({
+              bookingId: c.id,
+              bookingCode: c.bookingCode,
+              startTime: c.startTime.toISOString(),
+              endTime: c.endTime.toISOString(),
+              status: c.status,
+              overwritten: dto.forceOverwrite,
+            }))
+          : undefined,
       adminAction,
     };
   }
@@ -1437,5 +1494,145 @@ export class BookingsService {
       },
       adminId,
     );
+  }
+
+  /**
+   * 💵 Collect Extra Payment (Staff/Admin)
+   * When admin extended booking time, staff collects the extra payment at venue
+   * Accepts: CASH, BANK_TRANSFER
+   */
+  async collectExtraPayment(
+    bookingId: number,
+    staffId: number,
+    paymentMethod: 'CASH' | 'BANK_TRANSFER',
+    amount?: number, // Optional: if not provided, collect full pending amount
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        court: true,
+        user: {
+          select: { id: true, email: true, name: true, phone: true },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking #${bookingId} not found`);
+    }
+
+    // Calculate pending amount
+    const pendingAmount =
+      Number(booking.totalPrice) - Number(booking.paidAmount);
+
+    if (pendingAmount <= 0) {
+      throw new BadRequestException('No pending payment for this booking');
+    }
+
+    // Determine collection amount
+    const collectAmount = amount || pendingAmount;
+
+    if (collectAmount > pendingAmount) {
+      throw new BadRequestException(
+        `Cannot collect more than pending amount (${pendingAmount} VND)`,
+      );
+    }
+
+    // Update paidAmount
+    const newPaidAmount = Number(booking.paidAmount) + collectAmount;
+
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        paidAmount: new Decimal(newPaidAmount),
+      },
+      include: {
+        court: true,
+        user: {
+          select: { id: true, email: true, name: true, phone: true },
+        },
+      },
+    });
+
+    // Log the collection
+    this.logger.log(
+      `💵 Staff #${staffId} collected ${collectAmount} VND (${paymentMethod}) for booking #${booking.bookingCode}`,
+    );
+
+    // Create admin action log
+    await this.prisma.adminAction.create({
+      data: {
+        adminId: staffId,
+        action: 'COLLECT_EXTRA_PAYMENT',
+        targetType: 'Booking',
+        targetId: bookingId,
+        reason: `Collected extra payment via ${paymentMethod}`,
+        metadata: {
+          bookingCode: booking.bookingCode,
+          amountCollected: collectAmount,
+          paymentMethod,
+          previousPaidAmount: Number(booking.paidAmount),
+          newPaidAmount,
+          remainingPending: pendingAmount - collectAmount,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      message: `Collected ${new Intl.NumberFormat('vi-VN').format(collectAmount)}đ successfully`,
+      booking: updatedBooking,
+      collection: {
+        amountCollected: collectAmount,
+        paymentMethod,
+        previousPaidAmount: Number(booking.paidAmount),
+        newPaidAmount,
+        remainingPending: pendingAmount - collectAmount,
+      },
+    };
+  }
+
+  /**
+   * 📊 Get booking payment status
+   * Returns detailed payment info for a booking
+   */
+  async getBookingPaymentStatus(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        bookingCode: true,
+        totalPrice: true,
+        paidAmount: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        userId: true,
+        guestName: true,
+        guestPhone: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking #${bookingId} not found`);
+    }
+
+    const totalPrice = Number(booking.totalPrice);
+    const paidAmount = Number(booking.paidAmount);
+    const pendingAmount = totalPrice - paidAmount;
+
+    return {
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      totalPrice,
+      paidAmount,
+      pendingAmount,
+      isFullyPaid: pendingAmount <= 0,
+      paymentStatus: booking.paymentStatus,
+      paymentMethod: booking.paymentMethod,
+      customerType: booking.userId ? 'MEMBER' : 'GUEST',
+      customerInfo: booking.userId
+        ? { userId: booking.userId }
+        : { guestName: booking.guestName, guestPhone: booking.guestPhone },
+    };
   }
 }

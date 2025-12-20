@@ -55,9 +55,7 @@ export class AdminUpdateBookingDto {
   @IsBoolean()
   recalculatePrice?: boolean; // Recalculate price after time change
 
-  @IsOptional()
-  @IsBoolean()
-  chargeExtraToWallet?: boolean; // Charge extra amount to wallet (for extensions)
+  // NOTE: chargeExtraToWallet removed - extra payment collected at venue by staff
 
   // ==================== METADATA ====================
 
@@ -78,7 +76,7 @@ export interface AdminUpdateResult {
     newPrice: number;
     difference: number;
     refunded?: boolean;
-    charged?: boolean;
+    pendingCollection?: boolean; // Extra payment to be collected at venue
   };
   conflicts?: {
     bookingId: number;

@@ -128,7 +128,8 @@ model Booking {
   endTime   DateTime
 
   // Pricing
-  totalPrice Decimal
+  totalPrice Decimal // Current total price (may change if admin updates)
+  paidAmount Decimal @default(0) // Amount actually paid by customer
 
   // Status
   status BookingStatus @default(PENDING_PAYMENT)

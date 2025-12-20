@@ -51,7 +51,13 @@ export class EventsGateway
 
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, email: true, name: true, role: true, isActive: true },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            isActive: true,
+          },
         });
 
         if (!user || !user.isActive) {
@@ -106,7 +112,9 @@ export class EventsGateway
       )?.[0];
       if (userId) {
         this.userSocketMap.delete(userId);
-        this.logger.log(`👋 Client disconnected: ${client.id}, userId: ${userId}`);
+        this.logger.log(
+          `👋 Client disconnected: ${client.id}, userId: ${userId}`,
+        );
       }
     }
   }
@@ -116,12 +124,14 @@ export class EventsGateway
    */
   private async joinRoleRooms(client: Socket, user: any) {
     this.logger.log(`🔍 [DEBUG] User ${user.email} has role: ${user.role}`);
-    
+
     switch (user.role) {
       case Role.ADMIN:
         await client.join('admin-room');
         await client.join('staff-room'); // Admin can see staff notifications too
-        this.logger.log(`👑 Admin "${user.email}" joined: admin-room, staff-room`);
+        this.logger.log(
+          `👑 Admin "${user.email}" joined: admin-room, staff-room`,
+        );
         break;
       case Role.STAFF:
         await client.join('staff-room');
@@ -134,10 +144,12 @@ export class EventsGateway
       default:
         this.logger.warn(`⚠️ Unknown role for ${user.email}: ${user.role}`);
     }
-    
+
     // 🔍 DEBUG: List rooms client is in
     const rooms = Array.from(client.rooms);
-    this.logger.log(`🔍 [DEBUG] ${user.email} is now in rooms: ${rooms.join(', ')}`);
+    this.logger.log(
+      `🔍 [DEBUG] ${user.email} is now in rooms: ${rooms.join(', ')}`,
+    );
   }
 
   emitBookingStatusChange(
@@ -209,13 +221,13 @@ export class EventsGateway
   emitToUser(userId: number, event: string, data: any) {
     // Try room-based first (if user connected via JWT)
     this.server.to(`user-${userId}`).emit(event, data);
-    
+
     // Fallback to direct socket (legacy)
     const socketId = this.userSocketMap.get(userId);
     if (socketId) {
       this.server.to(socketId).emit(event, data);
     }
-    
+
     this.logger.log(`📤 Emitted '${event}' to user-${userId}`);
   }
 
@@ -242,14 +254,16 @@ export class EventsGateway
     // 🔍 DEBUG: Check room sizes
     const staffRoom = this.server.in('staff-room');
     const adminRoom = this.server.in('admin-room');
-    
+
     const staffSockets = await staffRoom.fetchSockets();
     const adminSockets = await adminRoom.fetchSockets();
-    
+
     this.logger.log(`🔍 [DEBUG] staff-room has ${staffSockets.length} clients`);
     this.logger.log(`🔍 [DEBUG] admin-room has ${adminSockets.length} clients`);
-    this.logger.log(`🔍 [DEBUG] Emitting '${event}' with data: ${JSON.stringify(data)}`);
-    
+    this.logger.log(
+      `🔍 [DEBUG] Emitting '${event}' with data: ${JSON.stringify(data)}`,
+    );
+
     this.server.to('staff-room').to('admin-room').emit(event, data);
     this.logger.log(`📤 Emitted '${event}' to staff-room & admin-room`);
   }
@@ -260,7 +274,9 @@ export class EventsGateway
   broadcast(event: string, data: any) {
     this.logger.log(`📢 Broadcasting '${event}' to all connected clients...`);
     this.server.emit(event, data);
-    this.logger.log(`✅ Broadcasted '${event}' successfully. Data: ${JSON.stringify(data)}`);
+    this.logger.log(
+      `✅ Broadcasted '${event}' successfully. Data: ${JSON.stringify(data)}`,
+    );
   }
 
   /**
@@ -310,10 +326,14 @@ export class EventsGateway
       client.emit('notification:marked-read', {
         notificationId: payload.notificationId,
       });
-      
-      this.logger.log(`✅ Notification #${payload.notificationId} marked as read by user ${user.id}`);
+
+      this.logger.log(
+        `✅ Notification #${payload.notificationId} marked as read by user ${user.id}`,
+      );
     } catch (error) {
-      this.logger.error(`❌ Failed to mark notification as read: ${error.message}`);
+      this.logger.error(
+        `❌ Failed to mark notification as read: ${error.message}`,
+      );
     }
   }
 }

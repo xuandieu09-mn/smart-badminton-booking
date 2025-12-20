@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useCourts } from './hooks/useCourts';
 import { useAllCourtBookingsByDate } from './hooks/useCourtBookings';
@@ -9,6 +9,7 @@ import TimelineResourceGrid, {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api/client';
 import { useAuthStore } from '@/store/authStore';
+import HybridDatePicker from '@/components/common/HybridDatePicker';
 import './components/TimelineResourceGrid.css';
 
 // NEW: Multi-court bulk booking data structure
@@ -248,49 +249,14 @@ export const Calendar: React.FC = () => {
           <p className="text-gray-600">Chọn sân và giờ để đặt sân</p>
         </div>
 
-        {/* Date Selector */}
-        <div className="mb-6 bg-white rounded-lg shadow p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-            <button
-              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
-            >
-              ← Hôm trước
-            </button>
-
-            <h2 className="text-2xl font-bold text-center">
-              {format(selectedDate, 'dd/MM/yyyy')}
-            </h2>
-
-            <button
-              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
-            >
-              Hôm sau →
-            </button>
-          </div>
-
-          {/* Quick date shortcuts */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-              <button
-                key={day}
-                onClick={() => setSelectedDate(addDays(new Date(), day))}
-                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${
-                  format(selectedDate, 'yyyy-MM-dd') ===
-                  format(addDays(new Date(), day), 'yyyy-MM-dd')
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                }`}
-              >
-                {day === 0
-                  ? 'Hôm nay'
-                  : day === 1
-                    ? 'Ngày mai'
-                    : 'T' + (2 + day)}
-              </button>
-            ))}
-          </div>
+        {/* New Hybrid Date Picker */}
+        <div className="mb-6">
+          <HybridDatePicker
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            allowPast={false}
+            maxFutureDays={30}
+          />
         </div>
 
         {/* Timeline Grid */}

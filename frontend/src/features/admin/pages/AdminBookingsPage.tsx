@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useCourts } from '../../calendar/hooks/useCourts';
 import { useAllCourtBookingsByDate } from '../../calendar/hooks/useCourtBookings';
@@ -8,6 +8,7 @@ import TimelineResourceGrid, {
 } from '../../calendar/components/TimelineResourceGrid';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminBookingModal from '../components/AdminBookingModal';
+import HybridDatePicker from '@/components/common/HybridDatePicker';
 import '../../calendar/components/TimelineResourceGrid.css';
 
 // ==================== TYPES ====================
@@ -24,6 +25,7 @@ interface Booking {
   startTime: string;
   endTime: string;
   totalPrice: number;
+  paidAmount: number;
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -135,55 +137,13 @@ export const AdminBookingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Date Selector */}
-        <div className="bg-white rounded-xl shadow p-4 md:p-6">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                📅 Chọn ngày:
-              </label>
-              <input
-                type="date"
-                value={format(selectedDate, 'yyyy-MM-dd')}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
-              {[-3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7].map((offset) => {
-                const date = addDays(new Date(), offset);
-                const isSelected =
-                  format(selectedDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-                const isPast = offset < 0;
-
-                return (
-                  <button
-                    key={offset}
-                    onClick={() => setSelectedDate(date)}
-                    className={`
-                      px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition flex-shrink-0
-                      ${isSelected
-                        ? 'bg-indigo-600 text-white shadow-lg'
-                        : isPast
-                          ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                      }
-                    `}
-                  >
-                    {offset === 0
-                      ? 'Hôm nay'
-                      : offset === -1
-                        ? 'Hôm qua'
-                        : offset === 1
-                          ? 'Ngày mai'
-                          : format(date, 'dd/MM')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        {/* New Hybrid Date Picker - Admin Mode (allow past dates) */}
+        <HybridDatePicker
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          allowPast={true}
+          maxFutureDays={60}
+        />
 
         {/* Timeline Grid */}
         <div className="bg-white rounded-xl shadow overflow-hidden">

@@ -10,6 +10,17 @@ import { Role } from '@prisma/client';
 export class RevenueController {
   constructor(private revenueService: RevenueService) {}
 
+  /**
+   * 📊 GET /api/revenue/summary?date=YYYY-MM-DD
+   * Returns: { bookingRevenue, posRevenue, refundDeduction, total }
+   */
+  @Get('summary')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getRevenueSummary(@Query('date') date?: string) {
+    const targetDate = date ? new Date(date) : new Date();
+    return this.revenueService.getRevenueSummary(targetDate);
+  }
+
   @Get('daily')
   @Roles(Role.STAFF, Role.ADMIN)
   async getDailyRevenue(@Query('date') date?: string) {

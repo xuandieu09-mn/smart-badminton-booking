@@ -233,13 +233,14 @@ export class WalletService {
         },
       });
 
-      // 5. Update booking status
+      // 5. Update booking status AND paidAmount
       const updatedBooking = await tx.booking.update({
         where: { id: bookingId },
         data: {
           paymentStatus: 'PAID',
           status: 'CONFIRMED',
           paymentMethod: 'WALLET',
+          paidAmount: totalPrice, // ✅ FIX: Track actual paid amount
         },
         include: {
           court: true,
