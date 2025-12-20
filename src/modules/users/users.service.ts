@@ -5,10 +5,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto } from './dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getAllUsers() {
     return this.prisma.user.findMany({
@@ -104,10 +108,11 @@ export class UsersService {
 
   /**
    * Update user by admin (name, role, isActive)
+   * Sends notification if account is locked/unlocked
    */
   async updateUser(
     userId: number,
-    data: { name?: string; role?: string; isActive?: boolean },
+    data: { name?: string; role?: string; isActive?: boolean; lockReason?: string },
   ) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
@@ -117,6 +122,12 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
+
+    // Check if isActive status is changing
+    const wasActive = user.isActive;
+    const willBeActive = data.isActive;
+    const isLocking = wasActive === true && willBeActive === false;
+    const isUnlocking = wasActive === false && willBeActive === true;
 
     // Update user
     const updatedUser = await this.prisma.user.update({
@@ -136,6 +147,19 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    // 🔒 Send notification if account was locked
+    if (isLocking) {
+      await this.notificationsService.notifyAccountLocked(
+        userId,
+        data.lockReason || 'Vi phạm quy định sử dụng dịch vụ',
+      );
+    }
+
+    // 🔓 Send notification if account was unlocked
+    if (isUnlocking) {
+      await this.notificationsService.notifyAccountUnlocked(userId);
+    }
 
     return updatedUser;
   }

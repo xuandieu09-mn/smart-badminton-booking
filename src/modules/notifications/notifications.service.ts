@@ -38,9 +38,12 @@ interface BookingData {
   userId: number;
   status: string;
   totalAmount?: unknown;
+  totalPrice?: unknown; // For refund calculations
+  paidAmount?: unknown; // For tracking paid amount
   startTime: Date | string;
   endTime: Date | string;
   expiresAt?: Date | null;
+  courtId?: number; // Court ID for notifications
   court?: { name: string };
   user?: { fullName?: string; name?: string; email: string };
   payment?: { method: string };
@@ -201,18 +204,25 @@ export class NotificationsService {
 
   /**
    * 📢 Create notification in DB and emit to specific user
+   * targetRole is added to metadata for frontend filtering
    */
   async createAndEmitNotification(
     dto: CreateNotificationDto,
   ): Promise<unknown> {
     try {
+      // Add targetRole to metadata for frontend filtering
+      const metadataWithRole = {
+        ...(dto.metadata as object || {}),
+        targetRole: 'CUSTOMER', // User-specific notifications are for customers
+      };
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: dto.userId,
           title: dto.title,
           message: dto.message,
           type: dto.type,
-          metadata: (dto.metadata as object) || {},
+          metadata: metadataWithRole,
         },
       });
 
@@ -239,19 +249,31 @@ export class NotificationsService {
 
   /**
    * 📢 Create notification for role rooms (Staff/Admin) - saves to DB with userId=null
+   * targetRole is added to metadata for frontend filtering
    */
   async createRoleNotification(
     targetRooms: ('staff-room' | 'admin-room')[],
     dto: Omit<CreateNotificationDto, 'userId'>,
   ): Promise<void> {
     try {
+      // Determine targetRole based on rooms
+      const targetRoles: string[] = [];
+      if (targetRooms.includes('staff-room')) targetRoles.push('STAFF');
+      if (targetRooms.includes('admin-room')) targetRoles.push('ADMIN');
+
+      const metadataWithRole = {
+        ...(dto.metadata as object || {}),
+        targetRole: targetRoles.length === 1 ? targetRoles[0] : targetRoles,
+        targetRooms, // Also include rooms for debugging
+      };
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: null,
           title: dto.title,
           message: dto.message,
           type: dto.type,
-          metadata: (dto.metadata as object) || {},
+          metadata: metadataWithRole,
         },
       });
 
@@ -455,6 +477,11 @@ export class NotificationsService {
 
   /**
    * ⚠️ #3b: Notify CUSTOMER about their cancellation
+   *
+   * 📋 Chính sách hoàn tiền:
+   * - Case A (>24h): 100% hoàn tiền → SUCCESS notification
+   * - Case B (12-24h): 50% hoàn tiền → WARNING notification
+   * - Case C (<12h): 0% hoàn tiền → WARNING notification
    */
   async notifyCustomerBookingCancelled(
     booking: BookingData,
@@ -466,21 +493,64 @@ export class NotificationsService {
   ): Promise<void> {
     if (!booking.userId) return;
 
-    let message = `Hủy thành công đơn #${booking.bookingCode}.`;
-    let title = 'ℹ️ Đã hủy lịch';
-    let notificationType: NotificationType = NotificationType.INFO;
+    const bookingCode = booking.bookingCode;
+    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
+    const bookingTime = booking.startTime
+      ? new Date(booking.startTime).toLocaleString('vi-VN', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        })
+      : '';
 
-    if (refundInfo && refundInfo.refundAmount > 0) {
+    let message: string;
+    let title: string;
+    let notificationType: NotificationType;
+
+    // Case A: >24h trước → 100% hoàn tiền
+    if (refundInfo && refundInfo.refundPercentage === 100) {
       const refundAmountStr = this.formatCurrency(refundInfo.refundAmount);
       const walletBalanceStr = this.formatCurrency(refundInfo.walletBalance);
-      
-      title = '💸 Đã hủy lịch & hoàn tiền';
-      message = `Hủy thành công đơn #${booking.bookingCode}. Hoàn ${refundInfo.refundPercentage}% (${refundAmountStr}) vào ví. Số dư hiện tại: ${walletBalanceStr}.`;
+
+      title = '✅ Hủy sân thành công';
+      message =
+        `Bạn đã hủy thành công đơn #${bookingCode} (${courtName} - ${bookingTime}). ` +
+        `Do hủy trước 24h, bạn được hoàn 100% giá trị = ${refundAmountStr} vào ví. ` +
+        `💰 Số dư hiện tại: ${walletBalanceStr}. Cảm ơn bạn đã sử dụng dịch vụ!`;
       notificationType = NotificationType.SUCCESS;
-    } else if (refundInfo && refundInfo.refundPercentage === 0) {
-      title = '⚠️ Đã hủy lịch - Không hoàn tiền';
-      message = `Hủy thành công đơn #${booking.bookingCode}. Không được hoàn tiền do hủy muộn (<12h trước giờ chơi).`;
+    }
+    // Case B: 12-24h → 50% hoàn tiền
+    else if (refundInfo && refundInfo.refundPercentage === 50) {
+      const refundAmountStr = this.formatCurrency(refundInfo.refundAmount);
+      const walletBalanceStr = this.formatCurrency(refundInfo.walletBalance);
+      const deductedAmount = this.formatCurrency(refundInfo.refundAmount); // Same as refund since 50%
+
+      title = '⚠️ Hủy sân - Hoàn 50% giá trị';
+      message =
+        `Đơn #${bookingCode} (${courtName} - ${bookingTime}) đã được hủy. ` +
+        `⚠️ Do hủy trong khoảng 12-24h trước giờ chơi, bạn chỉ được hoàn 50% giá trị = ${refundAmountStr}. ` +
+        `50% còn lại (${deductedAmount}) bị trừ theo chính sách. ` +
+        `💰 Số dư hiện tại: ${walletBalanceStr}. Lần sau hãy hủy sớm hơn nhé!`;
       notificationType = NotificationType.WARNING;
+    }
+    // Case C: <12h → 0% hoàn tiền
+    else if (refundInfo && refundInfo.refundPercentage === 0) {
+      const paidAmount = booking.paidAmount
+        ? this.formatCurrency(Number(booking.paidAmount))
+        : this.formatCurrency(Number(booking.totalPrice) || 0);
+
+      title = '⛔ Hủy sân - Không được hoàn tiền';
+      message =
+        `Đơn #${bookingCode} (${courtName} - ${bookingTime}) đã được hủy. ` +
+        `⛔ Lưu ý: Bạn KHÔNG được hoàn tiền do hủy sát giờ chơi (<12h). ` +
+        `Số tiền ${paidAmount} đã thanh toán sẽ không được hoàn lại theo chính sách hủy sân. ` +
+        `📌 Chính sách: Hủy >24h = hoàn 100% | 12-24h = hoàn 50% | <12h = không hoàn tiền.`;
+      notificationType = NotificationType.WARNING;
+    }
+    // No refund info - Booking was unpaid (PENDING) or guest booking
+    else {
+      title = 'ℹ️ Đã hủy lịch đặt sân';
+      message = `Đơn #${bookingCode} (${courtName} - ${bookingTime}) đã được hủy thành công.`;
+      notificationType = NotificationType.INFO;
     }
 
     await this.createAndEmitNotification({
@@ -492,11 +562,17 @@ export class NotificationsService {
         event: 'BOOKING_CANCELLED_BY_USER',
         bookingId: booking.id,
         bookingCode: booking.bookingCode,
+        courtName,
+        bookingTime,
         refundAmount: refundInfo?.refundAmount || 0,
         refundPercentage: refundInfo?.refundPercentage || 0,
         walletBalance: refundInfo?.walletBalance || 0,
       },
     });
+
+    this.logger.log(
+      `📨 Cancellation notification sent to user #${booking.userId}: ${title}`,
+    );
   }
 
   /**
@@ -513,6 +589,96 @@ export class NotificationsService {
     this.logger.log(`⚠️ notifyBookingCancelled: #${booking.bookingCode}`);
     await this.notifyStaffBookingCancelled(booking);
     await this.notifyCustomerBookingCancelled(booking, refundInfo);
+  }
+
+  /**
+   * 🔨 #3c: Notify CUSTOMER when Admin Force Cancels their booking
+   *
+   * @param booking - Booking data
+   * @param adminReason - Reason provided by admin for cancellation
+   * @param refundInfo - Optional refund information if admin chose to refund
+   */
+  async notifyAdminCancelledBooking(
+    booking: BookingData,
+    adminReason: string,
+    refundInfo?: {
+      refundAmount: number;
+      walletBalance: number;
+    },
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    const bookingCode = booking.bookingCode;
+    const courtName = booking.court?.name || `Sân ${booking.courtId}`;
+    const bookingTime = booking.startTime
+      ? new Date(booking.startTime).toLocaleString('vi-VN', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        })
+      : '';
+
+    let message: string;
+    let title: string;
+    let notificationType: NotificationType;
+
+    // Admin cancelled WITH refund
+    if (refundInfo && refundInfo.refundAmount > 0) {
+      const refundAmountStr = this.formatCurrency(refundInfo.refundAmount);
+      const walletBalanceStr = this.formatCurrency(refundInfo.walletBalance);
+
+      title = '🔨 Quản trị viên đã hủy đơn - Hoàn tiền đầy đủ';
+      message =
+        `Đơn #${bookingCode} (${courtName} - ${bookingTime}) đã bị hủy bởi Quản trị viên. ` +
+        `📝 Lý do: "${adminReason}". ` +
+        `✅ Bạn đã được hoàn ${refundAmountStr} vào ví. ` +
+        `💰 Số dư hiện tại: ${walletBalanceStr}. ` +
+        `Xin lỗi vì sự bất tiện này!`;
+      notificationType = NotificationType.SUCCESS;
+    }
+    // Admin cancelled WITHOUT refund
+    else {
+      title = '🔨 Quản trị viên đã hủy đơn';
+      message =
+        `Đơn #${bookingCode} (${courtName} - ${bookingTime}) đã bị hủy bởi Quản trị viên. ` +
+        `📝 Lý do: "${adminReason}". ` +
+        `⚠️ Đơn đặt sân này không được hoàn tiền theo quyết định của Quản trị viên. ` +
+        `Nếu bạn có thắc mắc, vui lòng liên hệ Hotline để được hỗ trợ.`;
+      notificationType = NotificationType.WARNING;
+    }
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title,
+      message,
+      type: notificationType,
+      metadata: {
+        event: 'BOOKING_CANCELLED_BY_ADMIN',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        courtName,
+        bookingTime,
+        adminReason,
+        refundAmount: refundInfo?.refundAmount || 0,
+        walletBalance: refundInfo?.walletBalance || 0,
+      },
+    });
+
+    // Also notify staff about admin action
+    await this.createRoleNotification(['staff-room'], {
+      title: '🔨 Admin hủy đơn',
+      message: `Admin đã hủy đơn #${bookingCode}. Lý do: ${adminReason}. ${refundInfo?.refundAmount ? `Hoàn tiền: ${this.formatCurrency(refundInfo.refundAmount)}` : 'Không hoàn tiền.'}`,
+      type: NotificationType.INFO,
+      metadata: {
+        event: 'ADMIN_FORCE_CANCEL',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        refunded: !!refundInfo?.refundAmount,
+      },
+    });
+
+    this.logger.log(
+      `🔨 Admin cancellation notification sent for #${bookingCode}: ${refundInfo?.refundAmount ? 'WITH' : 'NO'} refund`,
+    );
   }
 
   // ============================================================
@@ -727,7 +893,8 @@ export class NotificationsService {
   }
 
   /**
-   * 🔧 #9: Notify ALL about court maintenance
+   * 🔧 #9: Notify STAFF about court maintenance (NOT broadcast to all)
+   * Staff needs to know so they don't accept walk-in customers for that court
    */
   async notifyCourtMaintenance(
     court: { id: number; name: string },
@@ -736,27 +903,21 @@ export class NotificationsService {
   ): Promise<void> {
     const timeRange = `${startTime.toLocaleString('vi-VN')} - ${endTime.toLocaleString('vi-VN')}`;
 
-    await this.prisma.notification.create({
-      data: {
-        userId: null,
-        title: '🔧 Lịch bảo trì sân',
-        message: `🔧 ${court.name} sẽ bảo trì từ ${timeRange}. Vui lòng chọn sân khác.`,
-        type: NotificationType.WARNING,
-        metadata: {
-          event: 'COURT_MAINTENANCE',
-          courtId: court.id,
-          courtName: court.name,
-        },
+    // ✅ FIX: Only notify Staff/Admin, NOT broadcast to everyone
+    await this.createRoleNotification(['staff-room', 'admin-room'], {
+      title: '🔧 Lịch bảo trì sân',
+      message: `🔧 ${court.name} sẽ bảo trì từ ${timeRange}. Không nhận khách cho sân này.`,
+      type: NotificationType.WARNING,
+      metadata: {
+        event: 'COURT_MAINTENANCE',
+        courtId: court.id,
+        courtName: court.name,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
       },
     });
 
-    this.eventsGateway.broadcast('notification:new', {
-      title: '🔧 Lịch bảo trì sân',
-      message: `🔧 ${court.name} sẽ bảo trì từ ${timeRange}. Vui lòng chọn sân khác.`,
-      type: 'WARNING',
-    });
-
-    this.logger.log(`🔧 Maintenance: ${court.name}`);
+    this.logger.log(`🔧 Maintenance notification sent to staff: ${court.name}`);
   }
 
   /**
@@ -808,6 +969,202 @@ export class NotificationsService {
     });
 
     this.logger.log(`📅 Reminder: #${booking.bookingCode}`);
+  }
+
+  // ============================================================
+  // | #12 | HOÀN TIỀN - REFUND EVENTS
+  // ============================================================
+
+  /**
+   * 💰 #12a: Notify CUSTOMER about refund approval
+   * Called when refund request is approved and processed
+   */
+  async notifyRefundApproved(
+    booking: BookingData,
+    refundAmount: number,
+    walletBalance: number,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    const amount = this.formatCurrency(refundAmount);
+    const balance = this.formatCurrency(walletBalance);
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '💰 Hoàn tiền đã được xử lý',
+      message: `Yêu cầu hoàn tiền cho đơn #${booking.bookingCode} đã được duyệt. Số tiền ${amount} đã chuyển vào ví. Số dư hiện tại: ${balance}.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'REFUND_APPROVED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        refundAmount,
+        walletBalance,
+      },
+    });
+
+    // Notify Staff/Admin
+    await this.createRoleNotification(['staff-room', 'admin-room'], {
+      title: '✅ Hoàn tiền thành công',
+      message: `Đã hoàn ${amount} cho đơn #${booking.bookingCode}.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'REFUND_PROCESSED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        refundAmount,
+      },
+    });
+
+    this.logger.log(`💰 Refund approved: #${booking.bookingCode} - ${amount}`);
+  }
+
+  /**
+   * ❌ #12b: Notify CUSTOMER about refund rejection
+   */
+  async notifyRefundRejected(
+    booking: BookingData,
+    reason: string,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '❌ Yêu cầu hoàn tiền bị từ chối',
+      message: `Yêu cầu hoàn tiền cho đơn #${booking.bookingCode} bị từ chối. Lý do: ${reason}. Vui lòng liên hệ Hotline nếu có thắc mắc.`,
+      type: NotificationType.ERROR,
+      metadata: {
+        event: 'REFUND_REJECTED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        reason,
+      },
+    });
+
+    this.logger.log(`❌ Refund rejected: #${booking.bookingCode} - ${reason}`);
+  }
+
+  // ============================================================
+  // | #13 | ADMIN ĐỔI GIỜ - SCHEDULE CHANGE
+  // ============================================================
+
+  /**
+   * 📅 #13: Notify CUSTOMER when Admin changes their booking schedule
+   */
+  async notifyScheduleChanged(
+    booking: BookingData,
+    oldStartTime: Date,
+    oldEndTime: Date,
+    newStartTime: Date,
+    newEndTime: Date,
+    adminReason?: string,
+  ): Promise<void> {
+    if (!booking.userId) return;
+
+    const courtName = booking.court?.name || `Sân #${booking.courtId}`;
+    const oldTimeStr = `${oldStartTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${oldEndTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    const newTimeStr = `${newStartTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${newEndTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+    const dateStr = newStartTime.toLocaleDateString('vi-VN');
+
+    await this.createAndEmitNotification({
+      userId: booking.userId,
+      title: '📅 Lịch đặt sân đã được thay đổi',
+      message: `Đơn #${booking.bookingCode} (${courtName}) đã được điều chỉnh từ ${oldTimeStr} sang ${newTimeStr} ngày ${dateStr}.${adminReason ? ` Lý do: ${adminReason}` : ''}`,
+      type: NotificationType.WARNING,
+      metadata: {
+        event: 'SCHEDULE_CHANGED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        oldStartTime: oldStartTime.toISOString(),
+        oldEndTime: oldEndTime.toISOString(),
+        newStartTime: newStartTime.toISOString(),
+        newEndTime: newEndTime.toISOString(),
+        adminReason,
+      },
+    });
+
+    this.logger.log(`📅 Schedule changed: #${booking.bookingCode}`);
+  }
+
+  // ============================================================
+  // | #14 | CHECK-IN THÔNG BÁO CHO ADMIN/OWNER
+  // ============================================================
+
+  /**
+   * 🏃 #14: Notify ADMIN/OWNER when customer arrives and checks in
+   */
+  async notifyCustomerArrived(booking: BookingData): Promise<void> {
+    const courtName = booking.court?.name || `Sân #${booking.courtId}`;
+    const customerName = booking.user?.fullName || booking.user?.name || 'Khách';
+    const timeStr = new Date(booking.startTime).toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    await this.createRoleNotification(['admin-room', 'staff-room'], {
+      title: '🏃 Khách đã đến',
+      message: `${customerName} đã check-in tại ${courtName} lúc ${timeStr}.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'CUSTOMER_ARRIVED',
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        courtName,
+        customerName,
+      },
+    });
+
+    this.logger.log(`🏃 Customer arrived: ${customerName} at ${courtName}`);
+  }
+
+  // ============================================================
+  // | #15 | KHÓA TÀI KHOẢN - ACCOUNT LOCKED
+  // ============================================================
+
+  /**
+   * 🔒 #15: Notify CUSTOMER when their account is locked by Admin
+   * Also triggers force logout via WebSocket
+   */
+  async notifyAccountLocked(
+    userId: number,
+    reason: string,
+  ): Promise<void> {
+    await this.createAndEmitNotification({
+      userId,
+      title: '🔒 Tài khoản đã bị khóa',
+      message: `Tài khoản của bạn đã bị khóa. Lý do: ${reason}. Vui lòng liên hệ Hotline để được hỗ trợ.`,
+      type: NotificationType.ERROR,
+      metadata: {
+        event: 'ACCOUNT_LOCKED',
+        reason,
+        forceLogout: true, // Frontend should handle this
+      },
+    });
+
+    // Emit special event to force logout
+    this.eventsGateway.emitToUser(userId, 'account:locked', {
+      reason,
+      forceLogout: true,
+    });
+
+    this.logger.log(`🔒 Account locked notification sent to user #${userId}`);
+  }
+
+  /**
+   * 🔓 #15b: Notify CUSTOMER when their account is unlocked
+   */
+  async notifyAccountUnlocked(userId: number): Promise<void> {
+    await this.createAndEmitNotification({
+      userId,
+      title: '🔓 Tài khoản đã được mở khóa',
+      message: `Tài khoản của bạn đã được mở khóa. Bạn có thể đăng nhập lại bình thường.`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        event: 'ACCOUNT_UNLOCKED',
+      },
+    });
+
+    this.logger.log(`🔓 Account unlocked notification sent to user #${userId}`);
   }
 
   // ==================== DATABASE QUERIES ====================

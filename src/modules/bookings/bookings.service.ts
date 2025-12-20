@@ -800,6 +800,8 @@ export class BookingsService {
     // 🔔 Notify customer about successful check-in
     try {
       await this.notificationsService.notifyCheckInSuccess(updatedBooking);
+      // 🏃 Also notify admin/staff that customer has arrived
+      await this.notificationsService.notifyCustomerArrived(updatedBooking);
     } catch (error) {
       this.logger.error(
         `Failed to send check-in notification: ${error.message}`,
@@ -1445,6 +1447,85 @@ export class BookingsService {
           ? booking.courtId
           : undefined,
     });
+
+    // 9️⃣ Send notification if admin cancelled the booking
+    if (
+      dto.status === BookingStatus.CANCELLED &&
+      booking.status !== BookingStatus.CANCELLED &&
+      booking.userId
+    ) {
+      // Get updated wallet balance if refund was issued
+      let refundInfo:
+        | { refundAmount: number; walletBalance: number }
+        | undefined;
+
+      if (dto.refundToWallet) {
+        const wallet = await this.prisma.wallet.findUnique({
+          where: { userId: booking.userId },
+        });
+        refundInfo = {
+          refundAmount: Number(booking.paidAmount),
+          walletBalance: wallet ? Number(wallet.balance) : 0,
+        };
+      }
+
+      // Send admin cancellation notification to customer
+      const adminReason = dto.adminNote || 'Hủy theo yêu cầu của quản trị viên';
+      await this.notificationsService.notifyAdminCancelledBooking(
+        {
+          id: booking.id,
+          bookingCode: booking.bookingCode,
+          userId: booking.userId,
+          status: BookingStatus.CANCELLED,
+          courtId: booking.courtId,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          totalPrice: booking.totalPrice,
+          paidAmount: booking.paidAmount,
+          court: updatedBooking.court,
+        },
+        adminReason,
+        refundInfo,
+      );
+    }
+
+    // 🔟 Send notification if admin changed the schedule (time)
+    if (
+      (dto.startTime || dto.endTime) &&
+      booking.userId &&
+      dto.status !== BookingStatus.CANCELLED
+    ) {
+      const oldStartTime = booking.startTime;
+      const oldEndTime = booking.endTime;
+      const newStartTime = dto.startTime
+        ? new Date(dto.startTime)
+        : booking.startTime;
+      const newEndTime = dto.endTime ? new Date(dto.endTime) : booking.endTime;
+
+      // Only notify if time actually changed
+      if (
+        oldStartTime.getTime() !== newStartTime.getTime() ||
+        oldEndTime.getTime() !== newEndTime.getTime()
+      ) {
+        await this.notificationsService.notifyScheduleChanged(
+          {
+            id: booking.id,
+            bookingCode: booking.bookingCode,
+            userId: booking.userId,
+            status: booking.status,
+            courtId: booking.courtId,
+            startTime: newStartTime,
+            endTime: newEndTime,
+            court: updatedBooking.court,
+          },
+          oldStartTime,
+          oldEndTime,
+          newStartTime,
+          newEndTime,
+          dto.adminNote,
+        );
+      }
+    }
 
     return {
       success: true,

@@ -110,6 +110,62 @@ const playNotificationSound = () => {
   }
 };
 
+// ==================== ROLE FILTERING ====================
+
+/**
+ * 🔒 Filter notifications based on user role
+ * Ensures customers don't see staff/admin notifications and vice versa
+ */
+const shouldShowNotification = (
+  notification: Notification,
+  userRole: string | null
+): boolean => {
+  const targetRole = notification.metadata?.targetRole;
+  const targetRooms = notification.metadata?.targetRooms as string[] | undefined;
+
+  // If no targetRole specified, show to all (backward compatibility)
+  if (!targetRole && !targetRooms) {
+    return true;
+  }
+
+  // Handle array of target roles
+  if (Array.isArray(targetRole)) {
+    return targetRole.includes(userRole || '');
+  }
+
+  // Handle single target role
+  if (typeof targetRole === 'string') {
+    // CUSTOMER notifications should only show to CUSTOMER
+    if (targetRole === 'CUSTOMER') {
+      return userRole === 'CUSTOMER';
+    }
+    // STAFF notifications should show to STAFF and ADMIN
+    if (targetRole === 'STAFF') {
+      return userRole === 'STAFF' || userRole === 'ADMIN';
+    }
+    // ADMIN notifications should show to ADMIN only
+    if (targetRole === 'ADMIN') {
+      return userRole === 'ADMIN';
+    }
+  }
+
+  // Check room-based targeting
+  if (targetRooms) {
+    if (userRole === 'CUSTOMER') {
+      // Customers should NOT see staff-room or admin-room notifications
+      return !targetRooms.includes('staff-room') && !targetRooms.includes('admin-room');
+    }
+    if (userRole === 'STAFF') {
+      return targetRooms.includes('staff-room');
+    }
+    if (userRole === 'ADMIN') {
+      return targetRooms.includes('admin-room') || targetRooms.includes('staff-room');
+    }
+  }
+
+  return true;
+};
+
 // ==================== PROVIDER ====================
 
 interface SocketProviderProps {
@@ -121,6 +177,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [connected, setConnected] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userRole, setUserRole] = useState<string | null>(null); // Track user role for filtering
+  const userRoleRef = useRef<string | null>(null); // Ref for use in socket handlers
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
@@ -184,6 +242,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
     newSocket.on('connected', (data: { userId: number; role: string }) => {
       console.log('📡 Server confirmed:', data);
+      setUserRole(data.role); // 🔒 Store user role for notification filtering
+      userRoleRef.current = data.role; // Also update ref for socket handlers
       fetchNotifications();
     });
 
@@ -203,7 +263,16 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // ==================== NOTIFICATION EVENTS ====================
 
     newSocket.on('notification:new', (notification: Notification) => {
-      console.log('🔔 New notification:', notification);
+      console.log('🔔 New notification received:', notification);
+
+      // 🔒 ROLE-BASED FILTERING: Check if this notification is for current user's role
+      const currentRole = userRoleRef.current;
+      if (!shouldShowNotification(notification, currentRole)) {
+        console.log(`🚫 Notification filtered out (role: ${currentRole}, target: ${notification.metadata?.targetRole})`);
+        return; // Skip this notification - not for our role
+      }
+
+      console.log(`✅ Notification accepted for role: ${currentRole}`);
 
       // Add to list (avoid duplicates)
       setNotifications((prev) => {
@@ -283,6 +352,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       window.dispatchEvent(
         new CustomEvent('court-status-changed', { detail: data })
       );
+    });
+
+    // ==================== ACCOUNT EVENTS ====================
+
+    newSocket.on('account:locked', (data: { reason: string; forceLogout: boolean }) => {
+      console.log('🔒 Account locked:', data);
+      toast.error(`🔒 Tài khoản đã bị khóa: ${data.reason}`, {
+        duration: 10000,
+      });
+      
+      // Force logout if required
+      if (data.forceLogout) {
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          window.location.href = '/login?reason=account_locked';
+        }, 3000);
+      }
     });
 
     setSocket(newSocket);
