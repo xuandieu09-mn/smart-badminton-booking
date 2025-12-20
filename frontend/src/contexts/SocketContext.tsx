@@ -49,11 +49,14 @@ export const useSocket = () => {
 
 // ==================== TOAST HELPERS ====================
 
-const getToastConfig = (type: string) => {
+const getToastConfig = (type: string, metadata?: Record<string, any>) => {
+  // Check for POS sale - override icon
+  const icon = metadata?.type === 'POS_SALE' ? '🛒' : undefined;
+  
   switch (type?.toUpperCase()) {
     case 'SUCCESS':
       return {
-        icon: '✅',
+        icon: icon || '✅',
         style: {
           background: '#ECFDF5',
           color: '#065F46',
@@ -63,7 +66,7 @@ const getToastConfig = (type: string) => {
       };
     case 'WARNING':
       return {
-        icon: '⚠️',
+        icon: icon || '⚠️',
         style: {
           background: '#FFFBEB',
           color: '#92400E',
@@ -74,7 +77,7 @@ const getToastConfig = (type: string) => {
       };
     case 'ERROR':
       return {
-        icon: '❌',
+        icon: icon || '❌',
         style: {
           background: '#FEF2F2',
           color: '#991B1B',
@@ -86,7 +89,7 @@ const getToastConfig = (type: string) => {
     case 'INFO':
     default:
       return {
-        icon: 'ℹ️',
+        icon: icon || 'ℹ️',
         style: {
           background: '#EFF6FF',
           color: '#1E40AF',
@@ -216,7 +219,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       playNotificationSound();
 
       // Show toast
-      const config = getToastConfig(notification.type);
+      const config = getToastConfig(notification.type, notification.metadata);
       toast(
         <div className="flex flex-col gap-1">
           <strong className="text-sm">{notification.title}</strong>

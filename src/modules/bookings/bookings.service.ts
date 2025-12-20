@@ -2,7 +2,7 @@ import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES, JOB_NAMES } from '../queue/constants/queue.constants';
-import { CreateBookingDto } from './dto';
+import { CreateBookingDto, AdminUpdateBookingDto, AdminUpdateResult } from './dto';
 import {
   BookingStatus,
   BookingType,
@@ -586,6 +586,7 @@ export class BookingsService {
             id: true,
             name: true,
             email: true,
+            phone: true, // ✅ Added phone number
           },
         },
       },
@@ -626,6 +627,18 @@ export class BookingsService {
         paymentStatus: true,
         bookingCode: true,
         expiresAt: true,
+        totalPrice: true,
+        userId: true,
+        guestName: true,
+        guestPhone: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
       },
       orderBy: {
         startTime: 'asc',
@@ -648,6 +661,7 @@ export class BookingsService {
             id: true,
             email: true,
             name: true,
+            phone: true, // ✅ Added phone
           },
         },
       },
@@ -1091,5 +1105,337 @@ export class BookingsService {
       message: 'Booking cancelled successfully',
       booking: updatedBooking,
     };
+  }
+
+  // ==================== ADMIN GOD MODE ====================
+
+  /**
+   * 🔧 Admin Update Booking (God Mode)
+   * Bypass all validation rules - Admin can modify any booking
+   */
+  async adminUpdateBooking(
+    bookingId: number,
+    dto: AdminUpdateBookingDto,
+    adminId: number,
+  ): Promise<AdminUpdateResult> {
+    // 1️⃣ Get existing booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        court: true,
+        user: true,
+        payment: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking #${bookingId} not found`);
+    }
+
+    const oldPrice = Number(booking.totalPrice);
+    let newPrice = oldPrice;
+    let priceDifference = 0;
+    let conflictingBookings: any[] = [];
+    const updateData: any = {};
+
+    // 2️⃣ Handle Time Override
+    if (dto.startTime || dto.endTime) {
+      const newStartTime = dto.startTime ? new Date(dto.startTime) : booking.startTime;
+      const newEndTime = dto.endTime ? new Date(dto.endTime) : booking.endTime;
+
+      if (newStartTime >= newEndTime) {
+        throw new BadRequestException('End time must be after start time');
+      }
+
+      // Check for conflicts (excluding current booking)
+      const targetCourtId = dto.courtId || booking.courtId;
+      conflictingBookings = await this.prisma.booking.findMany({
+        where: {
+          id: { not: bookingId },
+          courtId: targetCourtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          startTime: { lt: newEndTime },
+          endTime: { gt: newStartTime },
+        },
+      });
+
+      if (conflictingBookings.length > 0 && !dto.forceOverwrite) {
+        return {
+          success: false,
+          message: `⚠️ Conflict detected with ${conflictingBookings.length} booking(s). Use forceOverwrite to override.`,
+          booking,
+          conflicts: conflictingBookings.map((c) => ({
+            bookingId: c.id,
+            bookingCode: c.bookingCode,
+            startTime: c.startTime.toISOString(),
+            endTime: c.endTime.toISOString(),
+            status: c.status,
+          })),
+        };
+      }
+
+      // Force overwrite - cancel conflicting bookings
+      if (dto.forceOverwrite && conflictingBookings.length > 0) {
+        for (const conflict of conflictingBookings) {
+          await this.prisma.booking.update({
+            where: { id: conflict.id },
+            data: { status: BookingStatus.CANCELLED },
+          });
+          this.logger.warn(`🔨 Admin force cancelled booking #${conflict.bookingCode}`);
+        }
+      }
+
+      updateData.startTime = newStartTime;
+      updateData.endTime = newEndTime;
+
+      // Recalculate price if requested
+      if (dto.recalculatePrice !== false) {
+        newPrice = await this.calculatePrice(
+          dto.courtId || booking.courtId,
+          newStartTime,
+          newEndTime,
+        );
+        updateData.totalPrice = newPrice;
+        priceDifference = newPrice - oldPrice;
+      }
+    }
+
+    // 3️⃣ Handle Court Transfer
+    if (dto.courtId && dto.courtId !== booking.courtId) {
+      const newCourt = await this.prisma.court.findUnique({
+        where: { id: dto.courtId },
+      });
+
+      if (!newCourt) {
+        throw new NotFoundException(`Court #${dto.courtId} not found`);
+      }
+
+      // Check for conflicts on new court
+      const newStart = dto.startTime ? new Date(dto.startTime) : booking.startTime;
+      const newEnd = dto.endTime ? new Date(dto.endTime) : booking.endTime;
+
+      const courtConflicts = await this.prisma.booking.findMany({
+        where: {
+          id: { not: bookingId },
+          courtId: dto.courtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          startTime: { lt: newEnd },
+          endTime: { gt: newStart },
+        },
+      });
+
+      if (courtConflicts.length > 0 && !dto.forceOverwrite) {
+        return {
+          success: false,
+          message: `⚠️ New court has ${courtConflicts.length} conflicting booking(s). Use forceOverwrite to override.`,
+          booking,
+          conflicts: courtConflicts.map((c) => ({
+            bookingId: c.id,
+            bookingCode: c.bookingCode,
+            startTime: c.startTime.toISOString(),
+            endTime: c.endTime.toISOString(),
+            status: c.status,
+          })),
+        };
+      }
+
+      if (dto.forceOverwrite && courtConflicts.length > 0) {
+        for (const conflict of courtConflicts) {
+          await this.prisma.booking.update({
+            where: { id: conflict.id },
+            data: { status: BookingStatus.CANCELLED },
+          });
+        }
+      }
+
+      updateData.courtId = dto.courtId;
+    }
+
+    // 4️⃣ Handle Status Override (Force Cancel with Refund option)
+    if (dto.status) {
+      updateData.status = dto.status;
+
+      // If cancelling with refund option
+      if (dto.status === BookingStatus.CANCELLED && dto.refundToWallet && booking.userId) {
+        const refundAmount = Number(booking.totalPrice);
+
+        await this.prisma.$transaction(async (tx) => {
+          const wallet = await tx.wallet.findUnique({
+            where: { userId: booking.userId! },
+          });
+
+          if (wallet) {
+            await tx.wallet.update({
+              where: { userId: booking.userId! },
+              data: { balance: { increment: refundAmount } },
+            });
+
+            await tx.walletTransaction.create({
+              data: {
+                walletId: wallet.id,
+                type: 'REFUND',
+                amount: refundAmount,
+                bookingId: booking.id,
+                description: `Admin force refund - Booking #${booking.bookingCode}`,
+                balanceBefore: Number(wallet.balance),
+                balanceAfter: Number(wallet.balance) + refundAmount,
+              },
+            });
+          }
+        });
+
+        this.logger.log(`💰 Admin refunded ${refundAmount} to user #${booking.userId}`);
+      }
+    }
+
+    // 5️⃣ Handle price difference (charge extra or refund)
+    if (priceDifference !== 0 && booking.userId) {
+      await this.prisma.$transaction(async (tx) => {
+        const wallet = await tx.wallet.findUnique({
+          where: { userId: booking.userId! },
+        });
+
+        if (wallet) {
+          if (priceDifference > 0 && dto.chargeExtraToWallet) {
+            // Extension: Charge extra from wallet
+            if (Number(wallet.balance) < priceDifference) {
+              throw new BadRequestException(`Insufficient wallet balance. Need ${priceDifference} VND`);
+            }
+
+            await tx.wallet.update({
+              where: { userId: booking.userId! },
+              data: { balance: { decrement: priceDifference } },
+            });
+
+            await tx.walletTransaction.create({
+              data: {
+                walletId: wallet.id,
+                type: 'PAYMENT',
+                amount: -priceDifference,
+                bookingId: booking.id,
+                description: `Extra charge - Time extension for #${booking.bookingCode}`,
+                balanceBefore: Number(wallet.balance),
+                balanceAfter: Number(wallet.balance) - priceDifference,
+              },
+            });
+          } else if (priceDifference < 0) {
+            // Shortened: Refund the difference
+            const refundAmount = Math.abs(priceDifference);
+
+            await tx.wallet.update({
+              where: { userId: booking.userId! },
+              data: { balance: { increment: refundAmount } },
+            });
+
+            await tx.walletTransaction.create({
+              data: {
+                walletId: wallet.id,
+                type: 'REFUND',
+                amount: refundAmount,
+                bookingId: booking.id,
+                description: `Partial refund - Time shortened for #${booking.bookingCode}`,
+                balanceBefore: Number(wallet.balance),
+                balanceAfter: Number(wallet.balance) + refundAmount,
+              },
+            });
+          }
+        }
+      });
+    }
+
+    // 6️⃣ Update booking
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: updateData,
+      include: {
+        court: true,
+        user: {
+          select: { id: true, email: true, name: true, phone: true },
+        },
+      },
+    });
+
+    // 7️⃣ Log admin action
+    const adminAction = await this.prisma.adminAction.create({
+      data: {
+        adminId,
+        action: 'ADMIN_UPDATE_BOOKING',
+        targetType: 'Booking',
+        targetId: bookingId,
+        reason: dto.adminNote || 'Admin override',
+        metadata: {
+          oldData: {
+            startTime: booking.startTime.toISOString(),
+            endTime: booking.endTime.toISOString(),
+            courtId: booking.courtId,
+            totalPrice: oldPrice,
+            status: booking.status,
+          },
+          newData: {
+            startTime: updatedBooking.startTime.toISOString(),
+            endTime: updatedBooking.endTime.toISOString(),
+            courtId: updatedBooking.courtId,
+            totalPrice: newPrice,
+            status: updatedBooking.status,
+          },
+          priceDifference,
+          conflictsOverwritten: conflictingBookings.length,
+        },
+      },
+    });
+
+    // 8️⃣ Broadcast update
+    this.eventsGateway.broadcast('booking:updated', {
+      bookingId: updatedBooking.id,
+      courtId: updatedBooking.courtId,
+      oldCourtId: booking.courtId !== updatedBooking.courtId ? booking.courtId : undefined,
+    });
+
+    return {
+      success: true,
+      message: '✅ Booking updated successfully',
+      booking: updatedBooking,
+      priceChange: priceDifference !== 0 ? {
+        oldPrice,
+        newPrice,
+        difference: priceDifference,
+        refunded: priceDifference < 0,
+        charged: priceDifference > 0 && dto.chargeExtraToWallet,
+      } : undefined,
+      conflicts: conflictingBookings.length > 0 ? conflictingBookings.map((c) => ({
+        bookingId: c.id,
+        bookingCode: c.bookingCode,
+        startTime: c.startTime.toISOString(),
+        endTime: c.endTime.toISOString(),
+        status: c.status,
+        overwritten: dto.forceOverwrite,
+      })) : undefined,
+      adminAction,
+    };
+  }
+
+  /**
+   * 🔨 Admin Force Cancel Booking
+   * Cancel any booking regardless of status with optional refund
+   */
+  async adminForceCancel(
+    bookingId: number,
+    adminId: number,
+    refundToWallet: boolean,
+    reason?: string,
+  ) {
+    return this.adminUpdateBooking(
+      bookingId,
+      {
+        status: BookingStatus.CANCELLED,
+        refundToWallet,
+        adminNote: reason || 'Admin force cancel',
+      },
+      adminId,
+    );
   }
 }

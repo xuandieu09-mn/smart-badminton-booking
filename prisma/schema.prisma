@@ -18,17 +18,17 @@ enum Role {
 
 enum BookingStatus {
   PENDING_PAYMENT // Waiting for payment (15 min)
-  CONFIRMED       // Payment received
-  CHECKED_IN      // Customer checked in
-  COMPLETED       // Session completed
-  CANCELLED       // Cancelled (> 24h before)
-  CANCELLED_LATE  // Late cancellation (< 24h before)
-  EXPIRED         // Payment timeout expired
-  BLOCKED         // Maintenance block (Admin)
+  CONFIRMED // Payment received
+  CHECKED_IN // Customer checked in
+  COMPLETED // Session completed
+  CANCELLED // Cancelled (> 24h before)
+  CANCELLED_LATE // Late cancellation (< 24h before)
+  EXPIRED // Payment timeout expired
+  BLOCKED // Maintenance block (Admin)
 }
 
 enum BookingType {
-  REGULAR     // Normal booking
+  REGULAR // Normal booking
   MAINTENANCE // Court maintenance
 }
 
@@ -47,9 +47,9 @@ enum PaymentStatus {
 }
 
 enum WalletTransactionType {
-  DEPOSIT          // Add money
-  REFUND           // Refund from cancellation
-  PAYMENT          // Pay for booking
+  DEPOSIT // Add money
+  REFUND // Refund from cancellation
+  PAYMENT // Pay for booking
   ADMIN_ADJUSTMENT // Admin manual adjustment
 }
 
@@ -63,28 +63,30 @@ enum NotificationType {
 // ==================== MODELS ====================
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String?
-  phone     String?  // Customer phone number
-  role      Role     @default(CUSTOMER)
-  isActive  Boolean  @default(true) // Allow deactivating accounts
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  password String
+  name     String?
+  phone    String? // Customer phone number
+  role     Role    @default(CUSTOMER)
+  isActive Boolean @default(true) // Allow deactivating accounts
 
   // 1 user has many bookings
-  bookings             Booking[] @relation("UserBookings")
+  bookings             Booking[]         @relation("UserBookings")
   // 1 user has 1 wallet
   wallet               Wallet?
   // Staff can create bookings for guests
-  staffCreatedBookings Booking[] @relation("StaffCreatedBookings")
+  staffCreatedBookings Booking[]         @relation("StaffCreatedBookings")
   // Staff can check in bookings
-  staffCheckedIns      Booking[] @relation("StaffCheckedIn")
+  staffCheckedIns      Booking[]         @relation("StaffCheckedIn")
   // Admin actions (audit log)
   adminActions         AdminAction[]
   // Staff sales (POS)
-  staffSales           Sale[]        @relation("StaffSales")
+  staffSales           Sale[]            @relation("StaffSales")
   // User notifications
   notifications        Notification[]
+  // Inventory actions
+  inventoryActions     InventoryAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -144,7 +146,7 @@ model Booking {
   // Check-in
   checkedInAt        DateTime?
   checkedInByStaffId Int?
-  checkedInByStaff   User?  @relation("StaffCheckedIn", fields: [checkedInByStaffId], references: [id])
+  checkedInByStaff   User?     @relation("StaffCheckedIn", fields: [checkedInByStaffId], references: [id])
 
   // Expiry (for PENDING_PAYMENT status)
   expiresAt DateTime?
@@ -153,10 +155,10 @@ model Booking {
   qrCode String? @db.Text // Base64 encoded QR code image
 
   // Recurring Booking Support (Day 15)
-  isRecurring        Boolean  @default(false)
-  recurrenceGroupId  String?  // Link all bookings in same recurring series
-  recurrencePattern  String?  // "WEEKLY" | "BIWEEKLY" | "MONTHLY"
-  recurrenceDayOfWeek Int?    // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isRecurring         Boolean @default(false)
+  recurrenceGroupId   String? // Link all bookings in same recurring series
+  recurrencePattern   String? // "WEEKLY" | "BIWEEKLY" | "MONTHLY"
+  recurrenceDayOfWeek Int? // 0=Sunday, 1=Monday, ..., 6=Saturday
 
   // Relations
   payment            Payment?
@@ -166,14 +168,14 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([recurrenceGroupId])
-
   // IMPORTANT: Exclusion Constraint is added in migration SQL
+
+  @@index([recurrenceGroupId])
 }
 
 model Wallet {
-  id     Int @id @default(autoincrement())
-  userId Int @unique
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
   user   User @relation(fields: [userId], references: [id])
 
   balance Decimal @default(0) // Current balance
@@ -216,7 +218,7 @@ model Payment {
 
   // VNPay/Momo data
   transactionId   String? // Transaction ID from payment gateway
-  gatewayResponse Json?   // Raw response from gateway
+  gatewayResponse Json? // Raw response from gateway
 
   status PaymentStatus @default(UNPAID)
   paidAt DateTime?
@@ -233,7 +235,7 @@ model PricingRule {
   name String // e.g. "Golden hours", "Weekend"
 
   // Conditions
-  dayOfWeek Int?   // 0=Sun, 1=Mon, ..., 6=Sat (NULL = all days)
+  dayOfWeek Int? // 0=Sun, 1=Mon, ..., 6=Sat (NULL = all days)
   startTime String // "17:00:00"
   endTime   String // "21:00:00"
 
@@ -252,7 +254,7 @@ model BookingCancellation {
   bookingId Int     @unique
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  cancelledBy     Int  // User ID (Customer/Staff/Admin)
+  cancelledBy     Int // User ID (Customer/Staff/Admin)
   cancelledByRole Role
   reason          String?
 
@@ -286,6 +288,13 @@ enum ProductCategory {
   OTHER
 }
 
+enum InventoryActionType {
+  RESTOCK // Nhập hàng
+  PRICE_UPDATE // Sửa giá
+  DAMAGE // Hủy hàng do hư tổn
+  SALE // Bán hàng (auto-created)
+}
+
 model Product {
   id          Int             @id @default(autoincrement())
   name        String
@@ -296,7 +305,8 @@ model Product {
   imageUrl    String?
   isActive    Boolean         @default(true)
 
-  saleItems SaleItem[]
+  saleItems        SaleItem[]
+  inventoryActions InventoryAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -304,21 +314,54 @@ model Product {
   @@index([category])
 }
 
+model InventoryAction {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  type InventoryActionType
+
+  // For RESTOCK
+  quantityChange Int? // Positive for restock, negative for damage
+
+  // For PRICE_UPDATE
+  oldPrice Decimal?
+  newPrice Decimal?
+
+  // For DAMAGE
+  reason String? // Lý do hư tổn
+
+  // For SALE (reference)
+  saleId Int?
+  sale   Sale? @relation(fields: [saleId], references: [id])
+
+  // Audit
+  performedBy     Int
+  performedByUser User @relation(fields: [performedBy], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([type])
+  @@index([createdAt])
+}
+
 model Sale {
-  id            Int      @id @default(autoincrement())
-  saleCode      String   @unique
+  id            Int     @id @default(autoincrement())
+  saleCode      String  @unique
   totalAmount   Decimal
-  paymentMethod String   @default("CASH")
-  
+  paymentMethod String  @default("CASH")
+
   staffId Int
   staff   User @relation("StaffSales", fields: [staffId], references: [id])
 
   customerId   Int?
   customerName String?
-  
+
   bookingId Int?
 
-  items SaleItem[]
+  items            SaleItem[]
+  inventoryActions InventoryAction[]
 
   createdAt DateTime @default(now())
 
@@ -342,22 +385,22 @@ model SaleItem {
 }
 
 model Notification {
-  id      Int              @id @default(autoincrement())
-  userId  Int?             // Null = broadcast to all
-  user    User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     Int   @id @default(autoincrement())
+  userId Int? // Null = broadcast to all
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   title   String
   message String           @db.Text
   type    NotificationType @default(INFO)
-  
+
   // Metadata
-  metadata Json?            // Extra data (bookingId, amount, etc.)
-  
-  isRead  Boolean          @default(false)
-  readAt  DateTime?
-  
+  metadata Json? // Extra data (bookingId, amount, etc.)
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
   createdAt DateTime @default(now())
-  
+
   @@index([userId, isRead])
   @@index([createdAt])
 }

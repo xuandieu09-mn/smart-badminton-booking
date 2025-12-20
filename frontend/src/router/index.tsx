@@ -18,7 +18,7 @@ import AdminCourtsPage from '../features/admin/pages/AdminCourtsPage';
 import AdminPaymentsPage from '../features/admin/pages/AdminPaymentsPage';
 import AdminUsersPage from '../features/admin/pages/AdminUsersPage';
 import AdminReportsPage from '../features/admin/pages/AdminReportsPage';
-import AdminRevenuePage from '../features/admin/pages/AdminRevenuePage';
+import AdminInventoryPage from '../features/admin/pages/AdminInventoryPage';
 import StaffLayout from '../features/staff/layouts/StaffLayout';
 import StaffDashboard from '../features/staff/pages/StaffDashboard';
 import CheckInPage from '../features/staff/pages/CheckInPage';
@@ -86,8 +86,8 @@ export const router = createBrowserRouter([
         element: <AdminReportsPage />,
       },
       {
-        path: 'revenue',
-        element: <AdminRevenuePage />,
+        path: 'inventory',
+        element: <AdminInventoryPage />,
       },
     ],
   },

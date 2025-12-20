@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Param,
   Body,
   UseGuards,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { QRCodeService } from './qrcode.service';
-import { CreateBookingDto } from './dto';
+import { CreateBookingDto, AdminUpdateBookingDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -238,5 +239,44 @@ export class BookingsController {
       },
       checkedInBy: user.email,
     };
+  }
+
+  // ==================== ADMIN GOD MODE ENDPOINTS ====================
+
+  /**
+   * 🔧 Admin Update Booking (God Mode)
+   * Admin can modify any booking regardless of business rules
+   * - Change time (extend/shorten)
+   * - Change court (transfer)
+   * - Force cancel with optional refund
+   * - Override conflicts
+   */
+  @Patch(':id/admin-update')
+  @Roles(Role.ADMIN)
+  async adminUpdateBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateBookingDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.adminUpdateBooking(id, dto, user.id);
+  }
+
+  /**
+   * 🔨 Admin Force Cancel
+   * Cancel any booking regardless of status
+   */
+  @Post(':id/admin-cancel')
+  @Roles(Role.ADMIN)
+  async adminForceCancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { refundToWallet?: boolean; reason?: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.adminForceCancel(
+      id,
+      user.id,
+      body.refundToWallet || false,
+      body.reason,
+    );
   }
 }

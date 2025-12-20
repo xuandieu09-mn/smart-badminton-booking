@@ -420,6 +420,47 @@ async function main() {
   });
   console.log('  Admin action: BLOCK_COURT for Court 5');
 
+  // ==================== POS PRODUCTS ====================
+  console.log('Creating POS products...');
+
+  const products = [
+    // Shuttlecocks
+    { name: 'Cau long RSL Classic', category: 'SHUTTLECOCK', price: 120000, stock: 50, description: 'Ong cau 12 trai, chat luong cao' },
+    { name: 'Cau long Yonex AS30', category: 'SHUTTLECOCK', price: 180000, stock: 30, description: 'Ong cau 12 trai, hang chinh hang' },
+    { name: 'Cau long Victor Gold', category: 'SHUTTLECOCK', price: 150000, stock: 40, description: 'Ong cau 12 trai, ben dep' },
+    // Beverages
+    { name: 'Nuoc suoi Aquafina 500ml', category: 'BEVERAGE', price: 10000, stock: 100, description: 'Nuoc tinh khiet' },
+    { name: 'Nuoc tang luc Revive 500ml', category: 'BEVERAGE', price: 15000, stock: 80, description: 'Bo sung chat dien giai' },
+    { name: 'Tra dao Cozy 450ml', category: 'BEVERAGE', price: 12000, stock: 60, description: 'Tra dao mat lanh' },
+    { name: 'Nuoc tang luc Sting 330ml', category: 'BEVERAGE', price: 12000, stock: 70, description: 'Tang nang luong' },
+    // Accessories  
+    { name: 'Quan can vot', category: 'ACCESSORY', price: 25000, stock: 40, description: 'Quan can tham mo hoi' },
+    { name: 'Bang do tham mo hoi', category: 'ACCESSORY', price: 30000, stock: 30, description: 'Bang do the thao' },
+    { name: 'Vo vot cau long', category: 'ACCESSORY', price: 50000, stock: 20, description: 'Vo dung vot cao cap' },
+    // Equipment
+    { name: 'Vot cau long Yonex Astrox', category: 'EQUIPMENT', price: 1500000, stock: 5, description: 'Vot cao cap chinh hang' },
+    { name: 'Giay cau long Kawasaki', category: 'EQUIPMENT', price: 450000, stock: 10, description: 'Giay the thao chuyen dung' },
+    // Other
+    { name: 'Khan mat', category: 'OTHER', price: 35000, stock: 25, description: 'Khan cotton mem mai' },
+    { name: 'Day vot thay the', category: 'OTHER', price: 80000, stock: 15, description: 'Day cuoc BG65' },
+  ];
+
+  for (const prod of products) {
+    await prisma.product.upsert({
+      where: { id: products.indexOf(prod) + 1 },
+      update: {},
+      create: {
+        name: prod.name,
+        category: prod.category as any,
+        price: prod.price,
+        stock: prod.stock,
+        description: prod.description,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`  Created ${products.length} products for POS`);
+
   console.log('\nSeeding completed successfully!');
   console.log('\nSummary:');
   console.log('  - Users: 1 Admin, 1 Staff, 3 Customers');
@@ -427,6 +468,7 @@ async function main() {
   console.log('  - Pricing Rules: 6');
   console.log('  - Bookings: 6 (including 1 maintenance block)');
   console.log('  - Wallets: 3 (for customers)');
+  console.log(`  - Products: ${products.length} (for POS)`);
 }
 
 main()

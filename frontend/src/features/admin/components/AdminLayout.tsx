@@ -27,7 +27,7 @@ const AdminLayout: React.FC = () => {
     { label: 'Sân cầu lông', icon: '🏟️', path: '/admin/courts' },
     { label: 'Thanh toán', icon: '💳', path: '/admin/payments' },
     { label: 'Người dùng', icon: '👥', path: '/admin/users' },
-    { label: 'Doanh thu', icon: '💰', path: '/admin/revenue' },
+    { label: 'Quản lý kho', icon: '📦', path: '/admin/inventory' },
     { label: 'Báo cáo', icon: '📈', path: '/admin/reports' },
   ];
 

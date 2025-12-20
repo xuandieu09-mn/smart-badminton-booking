@@ -7,12 +7,17 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSaleDto } from './dto/sale.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { InventoryActionType, NotificationType } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async createSale(dto: CreateSaleDto, staffId: number) {
     const saleCode = await this.generateSaleCode();
@@ -90,12 +95,69 @@ export class SalesService {
         },
       });
 
+      // Log inventory actions for each item sold
+      for (const item of dto.items) {
+        await tx.inventoryAction.create({
+          data: {
+            productId: item.productId,
+            type: InventoryActionType.SALE,
+            quantityChange: -item.quantity,
+            saleId: sale.id,
+            performedBy: staffId,
+          },
+        });
+      }
+
       this.logger.log(
         `✅ Sale ${sale.saleCode} created by staff #${staffId}. Total: ${totalAmount.toString()} VND`,
       );
 
+      // Send notifications
+      await this.notifyPOSSale(sale);
+
       return sale;
     });
+  }
+
+  // ==================== NOTIFICATIONS ====================
+  private async notifyPOSSale(sale: any) {
+    const totalAmount = Number(sale.totalAmount);
+    const formattedAmount = new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+    }).format(totalAmount);
+
+    // Notify ADMIN - Doanh thu nóng
+    await this.notificationsService.createRoleNotification(['admin-room'], {
+      title: '💰 Doanh thu POS mới',
+      message: `Doanh thu POS mới: +${formattedAmount} (Đơn hàng #${sale.saleCode})`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        saleId: sale.id,
+        saleCode: sale.saleCode,
+        amount: totalAmount,
+        staffId: sale.staffId,
+        staffName: sale.staff?.name || 'Unknown',
+        type: 'POS_SALE',
+      },
+    });
+
+    // Notify STAFF - Đồng bộ thông tin
+    await this.notificationsService.createRoleNotification(['staff-room'], {
+      title: '✅ Đơn POS hoàn tất',
+      message: `Đơn POS #${sale.saleCode} hoàn tất. Thực thu: ${formattedAmount}`,
+      type: NotificationType.SUCCESS,
+      metadata: {
+        saleId: sale.id,
+        saleCode: sale.saleCode,
+        amount: totalAmount,
+        customerName: sale.customerName,
+        itemCount: sale.items?.length || 0,
+        type: 'POS_SALE',
+      },
+    });
+
+    this.logger.log(`📢 Sent POS notifications for sale ${sale.saleCode}`);
   }
 
   async getSaleById(id: number) {

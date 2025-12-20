@@ -45,6 +45,7 @@ interface TimelineResourceGridProps {
   endHour?: number;
   selectedSlots?: SelectedSlot[]; // NEW: Array of selected slots
   onSlotToggle?: (courtId: number, startTime: Date) => void;
+  onBookingClick?: (booking: TimelineBooking) => void; // NEW: External booking click handler
   isLoading?: boolean;
   // NEW: User info for permission control
   currentUserId?: number;
@@ -101,6 +102,7 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
   endHour = DEFAULT_END_HOUR,
   selectedSlots = [], // NEW: Array-based selected slots
   onSlotToggle,
+  onBookingClick, // NEW: External booking click handler
   isLoading = false,
   currentUserId,
   userRole = 'CUSTOMER',
@@ -128,6 +130,13 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
 
   // Handle booking click
   const handleBookingClick = (block: typeof bookingBlocks[0], courtName: string) => {
+    // If external handler is provided (Admin mode), use it
+    if (onBookingClick) {
+      onBookingClick(block.rawBooking);
+      return;
+    }
+    
+    // Otherwise, show internal preview modal
     if (canViewBooking(block.rawBooking)) {
       setPreviewBooking({
         booking: block.rawBooking,

@@ -28,8 +28,12 @@ export const RegisterPage = () => {
       return;
     }
 
-    // Validate phone if provided
-    if (phone && !validatePhone(phone)) {
+    // Validate phone (REQUIRED)
+    if (!phone) {
+      setError('Vui lòng nhập số điện thoại');
+      return;
+    }
+    if (!validatePhone(phone)) {
       setError('Số điện thoại không hợp lệ (VD: 0901234567 hoặc +84901234567)');
       return;
     }
@@ -41,7 +45,7 @@ export const RegisterPage = () => {
         email, 
         password, 
         name,
-        phone: phone || undefined,
+        phone, // Always required now
       });
       alert('Đăng ký thành công! Vui lòng đăng nhập.');
       navigate('/auth/login');
@@ -93,7 +97,7 @@ export const RegisterPage = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Số điện thoại
+            Số điện thoại <span className="text-red-500">*</span>
           </label>
           <input
             type="tel"
@@ -101,8 +105,9 @@ export const RegisterPage = () => {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="0901234567"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
-          <p className="text-xs text-gray-500 mt-1">Số điện thoại Việt Nam (tùy chọn)</p>
+          <p className="text-xs text-gray-500 mt-1">Số điện thoại Việt Nam</p>
         </div>
 
         <div>

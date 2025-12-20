@@ -5,7 +5,13 @@ import { vi } from 'date-fns/locale';
 
 // ==================== HELPERS ====================
 
-const getTypeIcon = (type: NotificationType): string => {
+const getTypeIcon = (type: NotificationType, metadata?: Record<string, any>): string => {
+  // Check metadata for special icons
+  if (metadata?.type === 'POS_SALE') {
+    return '🛒';
+  }
+  
+  // Default icons based on notification type
   switch (type) {
     case 'SUCCESS':
       return '✅';
@@ -94,7 +100,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
             ${getTypeBgColor(notification.type)} border
           `}
         >
-          <span className="text-lg">{getTypeIcon(notification.type)}</span>
+          <span className="text-lg">{getTypeIcon(notification.type, notification.metadata)}</span>
         </div>
 
         {/* Content */}

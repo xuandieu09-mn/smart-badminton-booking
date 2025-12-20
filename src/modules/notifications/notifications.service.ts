@@ -468,7 +468,7 @@ export class NotificationsService {
 
     let message = `Hủy thành công đơn #${booking.bookingCode}.`;
     let title = 'ℹ️ Đã hủy lịch';
-    let notificationType = NotificationType.INFO;
+    let notificationType: NotificationType = NotificationType.INFO;
 
     if (refundInfo && refundInfo.refundAmount > 0) {
       const refundAmountStr = this.formatCurrency(refundInfo.refundAmount);

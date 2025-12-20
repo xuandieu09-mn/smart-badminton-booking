@@ -24,11 +24,11 @@ export class RegisterDto {
   name: string;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Số điện thoại là bắt buộc' })
   @Matches(/^(0|\+84)[0-9]{9,10}$/, {
-    message: 'Phone number must be a valid Vietnamese phone number',
+    message: 'Số điện thoại phải là số điện thoại Việt Nam hợp lệ',
   })
-  phone?: string;
+  phone: string; // ✅ Now REQUIRED
 
   @IsEnum(Role)
   @IsOptional()
