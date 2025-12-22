@@ -15,6 +15,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { CronModule } from './modules/cron/cron.module';
 import { PosModule } from './modules/pos/pos.module';
 import { RevenueModule } from './modules/revenue/revenue.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RevenueModule } from './modules/revenue/revenue.module';
     NotificationsModule, // ✅ Email Notifications
     PosModule, // ✅ POS System (Products & Sales)
     RevenueModule, // ✅ Revenue Tracking & Shift Closing
+    ChatModule, // ✅ AI Chat Assistant (Gemini)
   ],
   controllers: [AppController],
   providers: [AppService],

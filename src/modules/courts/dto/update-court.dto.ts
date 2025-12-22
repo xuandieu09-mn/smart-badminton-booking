@@ -15,6 +15,11 @@ export class UpdateCourtDto {
   pricePerHour?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  peakPricePerHour?: number; // Peak price (17:00 - closing)
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }

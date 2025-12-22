@@ -10,7 +10,7 @@ export class RevenueService {
 
   /**
    * 📊 Get Daily Revenue
-   * 
+   *
    * Formula: Total Revenue = A + B - C
    * - A: Booking Revenue (paidAmount của CONFIRMED/COMPLETED/CHECKED_IN bookings)
    * - B: POS Revenue (totalAmount của các đơn bán hàng)
@@ -144,7 +144,10 @@ export class RevenueService {
 
     // ✅ FIX: Use paidAmount for cash/online breakdown
     const cashRevenue = bookingByCash
-      .reduce((sum, b) => sum.add(new Decimal(b.paidAmount || 0)), new Decimal(0))
+      .reduce(
+        (sum, b) => sum.add(new Decimal(b.paidAmount || 0)),
+        new Decimal(0),
+      )
       .add(
         salesByCash.reduce(
           (sum, s) => sum.add(new Decimal(s.totalAmount)),
@@ -153,7 +156,10 @@ export class RevenueService {
       );
 
     const onlineRevenue = bookingByOnline
-      .reduce((sum, b) => sum.add(new Decimal(b.paidAmount || 0)), new Decimal(0))
+      .reduce(
+        (sum, b) => sum.add(new Decimal(b.paidAmount || 0)),
+        new Decimal(0),
+      )
       .add(
         salesByOnline.reduce(
           (sum, s) => sum.add(new Decimal(s.totalAmount)),
@@ -305,7 +311,7 @@ export class RevenueService {
    */
   async getRevenueSummary(date: Date) {
     const data = await this.getDailyRevenue(date);
-    
+
     return {
       date: data.date,
       formula: 'Total Revenue = Booking Revenue + POS Revenue - Refunds',

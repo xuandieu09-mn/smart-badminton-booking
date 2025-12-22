@@ -366,8 +366,7 @@ export class BookingsService {
             startTime: start,
             endTime: end,
             totalPrice,
-            paidAmount:
-              status === BookingStatus.CONFIRMED ? totalPrice : 0, // ✅ FIX: Track amount actually paid
+            paidAmount: status === BookingStatus.CONFIRMED ? totalPrice : 0, // ✅ FIX: Track amount actually paid
             status,
             type: bookingType,
             paymentMethod: dto.paymentMethod || null,
@@ -445,57 +444,110 @@ export class BookingsService {
   }
 
   /**
-   * 💰 Calculate price based on pricing rules
+   * 💰 Calculate price with time-based pricing (Standard vs Peak)
+   * Standard Price: Opening time until 17:00
+   * Peak Price: 17:00 until Closing time
    */
   private async calculatePrice(
     courtId: number,
     startTime: Date,
     endTime: Date,
   ): Promise<number> {
-    const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+    const totalMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
-    if (hours <= 0) {
+    if (totalMinutes <= 0) {
       throw new BadRequestException('Invalid time range');
     }
 
-    // Get applicable pricing rules
-    const dayOfWeek = startTime.getDay();
-    const timeStr = startTime.toTimeString().slice(0, 8);
-
-    const rules = await this.prisma.pricingRule.findMany({
-      where: {
-        isActive: true,
-        AND: [
-          {
-            OR: [
-              { courtId }, // Court-specific rules
-              { courtId: null }, // Global rules
-            ],
-          },
-          {
-            OR: [
-              { dayOfWeek }, // Day-specific rules
-              { dayOfWeek: null }, // All days
-            ],
-          },
-          {
-            startTime: { lte: timeStr },
-            endTime: { gte: timeStr },
-          },
-        ],
-      },
-      orderBy: {
-        priority: 'desc',
-      },
+    // Get court pricing
+    const court = await this.prisma.court.findUnique({
+      where: { id: courtId },
     });
 
-    // Use the highest priority rule, or fallback to court base price
-    const pricePerHour =
-      rules.length > 0
-        ? Number(rules[0].pricePerHour)
-        : await this.getCourtBasePrice(courtId);
+    if (!court) {
+      throw new NotFoundException('Court not found');
+    }
 
-    return Math.round(pricePerHour * hours);
+    const standardPricePerHour = Number(court.pricePerHour);
+    const peakPricePerHour = Number(court.peakPricePerHour);
+
+    // Calculate time-based pricing
+    const { standardMinutes, peakMinutes } = this.splitBookingByTimeOfDay(startTime, endTime);
+
+    // Formula: (StandardHours * standardPrice) + (PeakHours * peakPrice)
+    const standardCost = (standardMinutes / 60) * standardPricePerHour;
+    const peakCost = (peakMinutes / 60) * peakPricePerHour;
+
+    this.logger.log(
+      `💰 Price calculation for court ${courtId}: ` +
+      `Standard: ${standardMinutes}min @ ${standardPricePerHour}/h = ${standardCost}đ, ` +
+      `Peak: ${peakMinutes}min @ ${peakPricePerHour}/h = ${peakCost}đ, ` +
+      `Total: ${standardCost + peakCost}đ`
+    );
+
+    return Math.round(standardCost + peakCost);
+  }
+
+  /**
+   * 🕐 Split booking duration by time of day
+   * Standard: Before 17:00
+   * Peak: 17:00 and after
+   */
+  private splitBookingByTimeOfDay(
+    startTime: Date,
+    endTime: Date,
+  ): { standardMinutes: number; peakMinutes: number } {
+    const PEAK_HOUR = 17; // 17:00 is the cutoff
+
+    let standardMinutes = 0;
+    let peakMinutes = 0;
+
+    // Clone dates to avoid mutation
+    let currentTime = new Date(startTime);
+    const bookingEnd = new Date(endTime);
+
+    while (currentTime < bookingEnd) {
+      // Determine the end of the current period (either peak transition or booking end)
+      const currentHour = currentTime.getHours();
+      const currentMinute = currentTime.getMinutes();
+
+      // Calculate when the next period boundary occurs
+      let periodEnd: Date;
+
+      if (currentHour < PEAK_HOUR) {
+        // Currently in standard time - period ends at 17:00 or booking end
+        const peakStart = new Date(currentTime);
+        peakStart.setHours(PEAK_HOUR, 0, 0, 0);
+
+        periodEnd = peakStart < bookingEnd ? peakStart : bookingEnd;
+
+        // Add to standard minutes
+        const minutesInPeriod = (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
+        standardMinutes += minutesInPeriod;
+      } else {
+        // Currently in peak time (17:00+) - period ends at midnight or booking end
+        const midnight = new Date(currentTime);
+        midnight.setDate(midnight.getDate() + 1);
+        midnight.setHours(0, 0, 0, 0);
+
+        periodEnd = midnight < bookingEnd ? midnight : bookingEnd;
+
+        // Add to peak minutes
+        const minutesInPeriod = (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
+        peakMinutes += minutesInPeriod;
+      }
+
+      // Move to next period
+      currentTime = periodEnd;
+
+      // Handle day transition - reset to morning standard time
+      if (currentTime.getHours() === 0 && currentTime.getMinutes() === 0 && currentTime < bookingEnd) {
+        // New day starts in standard time
+        continue;
+      }
+    }
+
+    return { standardMinutes, peakMinutes };
   }
 
   /**

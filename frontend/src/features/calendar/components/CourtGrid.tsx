@@ -46,12 +46,19 @@ export const CourtGrid: React.FC<Props> = ({
                   </div>
                 )}
               </div>
-              <div className="text-sm font-semibold text-indigo-700">
-                {new Intl.NumberFormat('vi-VN', {
-                  style: 'currency',
-                  currency: 'VND',
-                }).format(Number(court.pricePerHour))}
-                /giờ
+              <div className="text-right">
+                <div className="text-sm font-semibold text-indigo-700">
+                  {new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND',
+                  }).format(Number(court.pricePerHour))}
+                  {' / '}
+                  {new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND',
+                  }).format(Number((court as any).peakPricePerHour || court.pricePerHour * 2))}
+                </div>
+                <div className="text-xs text-gray-500">Thường / Cao điểm (17h+)</div>
               </div>
             </div>
           </button>

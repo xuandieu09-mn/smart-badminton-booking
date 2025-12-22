@@ -24,6 +24,7 @@ export class CourtsService {
           name: data.name,
           description: data.description || null,
           pricePerHour: Number(data.pricePerHour), // Ensure number type for Decimal
+          peakPricePerHour: Number(data.peakPricePerHour ?? 100000), // Default peak price
           isActive: data.isActive ?? true,
         },
       });
@@ -79,6 +80,7 @@ export class CourtsService {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
         ...(data.pricePerHour !== undefined && { pricePerHour: data.pricePerHour }),
+        ...(data.peakPricePerHour !== undefined && { peakPricePerHour: data.peakPricePerHour }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });
@@ -355,6 +357,7 @@ export class CourtsService {
       name: court.name,
       description: court.description || undefined,
       pricePerHour: Number(court.pricePerHour),
+      peakPricePerHour: Number(court.peakPricePerHour),
       isActive: court.isActive,
       createdAt: court.createdAt,
       updatedAt: court.updatedAt,

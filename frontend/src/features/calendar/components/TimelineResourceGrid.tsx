@@ -248,7 +248,14 @@ const TimelineResourceGrid: React.FC<TimelineResourceGridProps> = ({
                       style: 'currency',
                       currency: 'VND',
                     }).format(Number(court.pricePerHour))}
-                    /h
+                    {' / '}
+                    {new Intl.NumberFormat('vi-VN', {
+                      style: 'currency',
+                      currency: 'VND',
+                    }).format(Number((court as any).peakPricePerHour || court.pricePerHour * 2))}
+                  </div>
+                  <div className="text-[10px] text-gray-400">
+                    Thường / Cao điểm (17h+)
                   </div>
                 </div>
               </div>

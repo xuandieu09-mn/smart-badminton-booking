@@ -212,7 +212,7 @@ export class NotificationsService {
     try {
       // Add targetRole to metadata for frontend filtering
       const metadataWithRole = {
-        ...(dto.metadata as object || {}),
+        ...((dto.metadata as object) || {}),
         targetRole: 'CUSTOMER', // User-specific notifications are for customers
       };
 
@@ -262,7 +262,7 @@ export class NotificationsService {
       if (targetRooms.includes('admin-room')) targetRoles.push('ADMIN');
 
       const metadataWithRole = {
-        ...(dto.metadata as object || {}),
+        ...((dto.metadata as object) || {}),
         targetRole: targetRoles.length === 1 ? targetRoles[0] : targetRoles,
         targetRooms, // Also include rooms for debugging
       };
@@ -1095,7 +1095,8 @@ export class NotificationsService {
    */
   async notifyCustomerArrived(booking: BookingData): Promise<void> {
     const courtName = booking.court?.name || `Sân #${booking.courtId}`;
-    const customerName = booking.user?.fullName || booking.user?.name || 'Khách';
+    const customerName =
+      booking.user?.fullName || booking.user?.name || 'Khách';
     const timeStr = new Date(booking.startTime).toLocaleTimeString('vi-VN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -1125,10 +1126,7 @@ export class NotificationsService {
    * 🔒 #15: Notify CUSTOMER when their account is locked by Admin
    * Also triggers force logout via WebSocket
    */
-  async notifyAccountLocked(
-    userId: number,
-    reason: string,
-  ): Promise<void> {
+  async notifyAccountLocked(userId: number, reason: string): Promise<void> {
     await this.createAndEmitNotification({
       userId,
       title: '🔒 Tài khoản đã bị khóa',

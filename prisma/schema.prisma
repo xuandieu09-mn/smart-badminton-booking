@@ -93,11 +93,12 @@ model User {
 }
 
 model Court {
-  id           Int     @id @default(autoincrement())
-  name         String
-  description  String?
-  pricePerHour Decimal @default(50000)
-  isActive     Boolean @default(true)
+  id               Int     @id @default(autoincrement())
+  name             String
+  description      String?
+  pricePerHour     Decimal @default(50000) // Standard price (opening - 17:00)
+  peakPricePerHour Decimal @default(100000) // Peak price (17:00 - closing)
+  isActive         Boolean @default(true)
 
   // 1 court has many bookings
   bookings     Booking[]

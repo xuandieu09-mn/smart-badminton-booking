@@ -5,6 +5,7 @@ export interface Court {
   name: string;
   description?: string;
   pricePerHour: number;
+  peakPricePerHour: number; // Peak price (17:00 - closing)
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;

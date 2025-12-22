@@ -315,7 +315,7 @@ export class CronService {
     });
 
     const activeIds = new Set(activeBookings.map((b) => b.id));
-    
+
     // Remove IDs that are no longer PENDING_PAYMENT
     idsToCheck.forEach((id) => {
       if (!activeIds.has(id)) {
@@ -344,7 +344,7 @@ export class CronService {
     });
 
     const recentIds = new Set(recentBookings.map((b) => b.id));
-    
+
     // Remove IDs for bookings that are checked in or too old
     idsToCheck.forEach((id) => {
       if (!recentIds.has(id)) {

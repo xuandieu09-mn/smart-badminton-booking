@@ -7,6 +7,7 @@ interface Court {
   name: string;
   description?: string;
   pricePerHour: number;
+  peakPricePerHour: number; // Peak price (17:00 - closing)
   isActive: boolean;
 }
 
@@ -14,6 +15,7 @@ interface CreateCourtInput {
   name: string;
   description?: string;
   pricePerHour: number;
+  peakPricePerHour: number; // Peak price (17:00 - closing)
 }
 
 const API = axios.create({
@@ -28,6 +30,7 @@ const CourtManagement: React.FC = () => {
     name: '',
     description: '',
     pricePerHour: 0,
+    peakPricePerHour: 100000, // Default peak price
   });
   const token = localStorage.getItem('access_token');
   const queryClient = useQueryClient();
@@ -49,7 +52,7 @@ const CourtManagement: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['courts'] });
-      setFormData({ name: '', description: '', pricePerHour: 0 });
+      setFormData({ name: '', description: '', pricePerHour: 0, peakPricePerHour: 100000 });
       setShowForm(false);
     },
   });
@@ -64,7 +67,7 @@ const CourtManagement: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['courts'] });
       setEditingId(null);
-      setFormData({ name: '', description: '', pricePerHour: 0 });
+      setFormData({ name: '', description: '', pricePerHour: 0, peakPricePerHour: 100000 });
     },
   });
 
@@ -102,6 +105,10 @@ const CourtManagement: React.FC = () => {
         typeof court.pricePerHour === 'string'
           ? parseInt(court.pricePerHour)
           : court.pricePerHour,
+      peakPricePerHour:
+        typeof court.peakPricePerHour === 'string'
+          ? parseInt(court.peakPricePerHour)
+          : court.peakPricePerHour || 100000,
     });
     setShowForm(true);
   };
@@ -117,7 +124,7 @@ const CourtManagement: React.FC = () => {
         <button
           onClick={() => {
             setEditingId(null);
-            setFormData({ name: '', description: '', pricePerHour: 0 });
+            setFormData({ name: '', description: '', pricePerHour: 0, peakPricePerHour: 100000 });
             setShowForm(true);
           }}
           className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
@@ -163,7 +170,8 @@ const CourtManagement: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Giá / Giờ (VND) *
+                Giá thường / Giờ (VND) *
+                <span className="text-xs text-gray-500 ml-1">(Trước 17:00)</span>
               </label>
               <input
                 type="number"
@@ -172,6 +180,25 @@ const CourtManagement: React.FC = () => {
                   setFormData({
                     ...formData,
                     pricePerHour: parseInt(e.target.value),
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="50000"
+                min="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Giá cao điểm / Giờ (VND) *
+                <span className="text-xs text-gray-500 ml-1">(Từ 17:00 trở đi)</span>
+              </label>
+              <input
+                type="number"
+                value={formData.peakPricePerHour}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    peakPricePerHour: parseInt(e.target.value),
                   })
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -217,7 +244,7 @@ const CourtManagement: React.FC = () => {
                 Mô tả
               </th>
               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Giá / Giờ
+                Giá thường / Cao điểm
               </th>
               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                 Trạng thái
@@ -238,10 +265,21 @@ const CourtManagement: React.FC = () => {
                   {court.description || '—'}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                  {typeof court.pricePerHour === 'string'
-                    ? parseInt(court.pricePerHour).toLocaleString('vi-VN')
-                    : court.pricePerHour.toLocaleString('vi-VN')}{' '}
-                  VND
+                  <div className="flex flex-col">
+                    <span>
+                      {typeof court.pricePerHour === 'string'
+                        ? parseInt(court.pricePerHour).toLocaleString('vi-VN')
+                        : court.pricePerHour.toLocaleString('vi-VN')}
+                      {' / '}
+                      {typeof court.peakPricePerHour === 'string'
+                        ? parseInt(court.peakPricePerHour).toLocaleString('vi-VN')
+                        : (court.peakPricePerHour || 100000).toLocaleString('vi-VN')}{' '}
+                      VND
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      Thường / Cao điểm (17:00+)
+                    </span>
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-sm">
                   <span

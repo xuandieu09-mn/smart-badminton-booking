@@ -21,6 +21,46 @@ type SelectedSlot = {
   price: number;
 };
 
+// 💰 Helper: Calculate slot price based on time of day
+// Standard Price: Before 17:00
+// Peak Price: 17:00 and after
+const calculateSlotPrice = (
+  startTime: Date,
+  durationMinutes: number,
+  standardPricePerHour: number,
+  peakPricePerHour: number,
+): number => {
+  const PEAK_HOUR = 17;
+  const startHour = startTime.getHours();
+  const startMinute = startTime.getMinutes();
+  
+  const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+  const endHour = endTime.getHours();
+  const endMinute = endTime.getMinutes();
+  
+  // Simple case: entire slot is in one time period
+  if (startHour < PEAK_HOUR && endHour < PEAK_HOUR) {
+    // All standard time
+    return (durationMinutes / 60) * standardPricePerHour;
+  }
+  if (startHour >= PEAK_HOUR) {
+    // All peak time
+    return (durationMinutes / 60) * peakPricePerHour;
+  }
+  
+  // Slot crosses 17:00 boundary - split calculation
+  const peakStart = new Date(startTime);
+  peakStart.setHours(PEAK_HOUR, 0, 0, 0);
+  
+  const standardMinutes = (peakStart.getTime() - startTime.getTime()) / (1000 * 60);
+  const peakMinutes = durationMinutes - standardMinutes;
+  
+  const standardCost = (standardMinutes / 60) * standardPricePerHour;
+  const peakCost = (peakMinutes / 60) * peakPricePerHour;
+  
+  return Math.round(standardCost + peakCost);
+};
+
 export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const navigate = useNavigate();
@@ -216,8 +256,10 @@ export const Calendar: React.FC = () => {
       return;
     }
 
-    // ADD: Calculate price and add to selection
-    const price = Number(court.pricePerHour) / 2; // 30-min slot = half price
+    // ADD: Calculate price based on time of day (standard vs peak)
+    const standardPrice = Number(court.pricePerHour);
+    const peakPrice = Number(court.peakPricePerHour || court.pricePerHour * 2);
+    const price = calculateSlotPrice(startTime, 30, standardPrice, peakPrice); // 30-min slot
 
     const newSlot: SelectedSlot = {
       courtId,

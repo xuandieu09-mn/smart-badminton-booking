@@ -1,6 +1,5 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { MainLayout } from '../features/common/layouts/MainLayout';
 import { AuthLayout } from '../features/common/layouts/AuthLayout';
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
 import { LoginPage } from '../features/auth/pages/LoginPage';
@@ -11,7 +10,6 @@ import MyBookingsPage from '../features/booking/pages/MyBookingsPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
 import TransactionHistory from '../features/dashboard/pages/TransactionHistory';
 import SettingsPage from '../features/settings/pages/SettingsPage';
-import AdminLayout from '../features/admin/components/AdminLayout';
 import AdminDashboard from '../features/admin/pages/AdminDashboard';
 import AdminBookingsPage from '../features/admin/pages/AdminBookingsPage';
 import AdminCourtsPage from '../features/admin/pages/AdminCourtsPage';
@@ -19,13 +17,15 @@ import AdminPaymentsPage from '../features/admin/pages/AdminPaymentsPage';
 import AdminUsersPage from '../features/admin/pages/AdminUsersPage';
 import AdminReportsPage from '../features/admin/pages/AdminReportsPage';
 import AdminInventoryPage from '../features/admin/pages/AdminInventoryPage';
-import StaffLayout from '../features/staff/layouts/StaffLayout';
 import StaffDashboard from '../features/staff/pages/StaffDashboard';
 import CheckInPage from '../features/staff/pages/CheckInPage';
 import StaffCourtsPage from '../features/staff/pages/StaffCourtsPage';
 import StaffPosPage from '../features/staff/pages/StaffPosPage';
 import { NotFound } from '../features/common/components/NotFound';
 import PaymentResultPage from '../features/payment/pages/PaymentResultPage';
+
+// 🎨 New Role-based Layouts
+import { CustomerLayout, StaffLayout, AdminLayout } from '../layouts';
 
 const HomePage: React.FC = () => (
   <div className="bg-white shadow rounded-lg p-6">
@@ -54,6 +54,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    // 👑 Admin Routes - Full Sidebar Layout
     path: '/admin',
     element: (
       <ProtectedRoute requiredRole="ADMIN">
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    // 👨‍💼 Staff Routes - Compact Sidebar Layout
     path: '/staff',
     element: (
       <ProtectedRoute requiredRole="STAFF">
@@ -118,10 +120,11 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    // 🛒 Customer Routes - Top Navbar Layout
     path: '/',
     element: (
       <ProtectedRoute>
-        <MainLayout />
+        <CustomerLayout />
       </ProtectedRoute>
     ),
     children: [

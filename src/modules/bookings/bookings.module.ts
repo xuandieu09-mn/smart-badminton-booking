@@ -16,5 +16,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   ],
   providers: [BookingsService, BookingTimeoutProcessor, QRCodeService],
   controllers: [BookingsController],
+  exports: [BookingsService], // Export for ChatModule (Agentic AI)
 })
 export class BookingsModule {}

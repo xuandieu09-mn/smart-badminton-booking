@@ -13,6 +13,11 @@ export class CreateCourtDto {
   pricePerHour: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  peakPricePerHour?: number; // Peak price (17:00 - closing), defaults to 100000
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
