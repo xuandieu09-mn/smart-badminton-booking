@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 
@@ -228,7 +229,19 @@ const ChatWidget: React.FC = () => {
                     : 'bg-white text-slate-700 rounded-bl-md shadow-md border border-slate-100'
                 )}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                {/* Render markdown for bot messages, plain text for user */}
+                {message.sender === 'bot' ? (
+                  <div className="text-sm leading-relaxed prose prose-sm prose-slate max-w-none
+                    prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5
+                    prose-headings:my-1 prose-headings:text-slate-800
+                    prose-strong:text-blue-600 prose-strong:font-semibold
+                    prose-table:text-xs prose-th:px-2 prose-td:px-2
+                    [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                )}
                 <p className={cn(
                   'text-[10px] mt-1',
                   message.sender === 'user' ? 'text-blue-100' : 'text-slate-400'

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateCourtDto,
@@ -17,8 +21,11 @@ export class CourtsService {
    */
   async create(data: CreateCourtDto): Promise<CourtResponseDto> {
     try {
-      console.log('📥 Creating court with data:', JSON.stringify(data, null, 2));
-      
+      console.log(
+        '📥 Creating court with data:',
+        JSON.stringify(data, null, 2),
+      );
+
       const court = await this.prisma.court.create({
         data: {
           name: data.name,
@@ -78,9 +85,15 @@ export class CourtsService {
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.pricePerHour !== undefined && { pricePerHour: data.pricePerHour }),
-        ...(data.peakPricePerHour !== undefined && { peakPricePerHour: data.peakPricePerHour }),
+        ...(data.description !== undefined && {
+          description: data.description,
+        }),
+        ...(data.pricePerHour !== undefined && {
+          pricePerHour: data.pricePerHour,
+        }),
+        ...(data.peakPricePerHour !== undefined && {
+          peakPricePerHour: data.peakPricePerHour,
+        }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });

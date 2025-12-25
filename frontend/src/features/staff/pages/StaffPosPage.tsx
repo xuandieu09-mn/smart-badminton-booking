@@ -21,6 +21,25 @@ interface CartItem {
   quantity: number;
 }
 
+interface InvoiceItem {
+  productId: number;
+  productName: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+  category: string;
+}
+
+interface Invoice {
+  invoiceCode: string;
+  customerName: string;
+  paymentMethod: string;
+  items: InvoiceItem[];
+  totalAmount: number;
+  createdAt: string;
+  staffName?: string;
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   SHUTTLECOCK: '🏸 Ống cầu',
   BEVERAGE: '🥤 Nước uống',
@@ -46,6 +65,10 @@ const StaffPosPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'VNPAY'>('CASH');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [printFormat, setPrintFormat] = useState<string>('');
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -119,7 +142,7 @@ const StaffPosPage: React.FC = () => {
     0,
   );
 
-  const handleCheckout = async () => {
+  const generateInvoice = async () => {
     if (cart.length === 0) {
       alert('⚠️ Giỏ hàng trống');
       return;
@@ -129,6 +152,79 @@ const StaffPosPage: React.FC = () => {
       alert('⚠️ Vui lòng nhập tên khách hàng');
       return;
     }
+
+    setIsGeneratingInvoice(true);
+
+    try {
+      const { data } = await API.post(
+        '/pos/sales/generate-invoice',
+        {
+          items: cart.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+          customerName: customerName.trim(),
+          paymentMethod: paymentMethod,
+        },
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+
+      setInvoice(data.invoice);
+      setPrintFormat(data.printFormat);
+      setShowInvoiceModal(true);
+    } catch (error: any) {
+      console.error('Invoice generation error:', error);
+      alert('❌ Lỗi tạo hóa đơn: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsGeneratingInvoice(false);
+    }
+  };
+
+  const handlePrintInvoice = () => {
+    if (!printFormat) return;
+
+    // Simulate receipt printing
+    const printWindow = window.open('', '', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Biên lai bán hàng</title>
+            <style>
+              body {
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                line-height: 1.4;
+                margin: 0;
+                padding: 10px;
+                background: white;
+              }
+              pre {
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                margin: 0;
+              }
+              @media print {
+                body { margin: 0; padding: 5px; }
+              }
+            </style>
+          </head>
+          <body>
+            <pre>${printFormat}</pre>
+            <script>
+              window.print();
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!invoice) return;
 
     setLoading(true);
 
@@ -155,8 +251,12 @@ const StaffPosPage: React.FC = () => {
           `Thanh toán: ${paymentMethod === 'CASH' ? '💵 Tiền mặt' : '🏦 Chuyển khoản'}`,
       );
 
+      // Reset
       setCart([]);
       setCustomerName('');
+      setShowInvoiceModal(false);
+      setInvoice(null);
+      setPrintFormat('');
       fetchProducts();
     } catch (error: any) {
       console.error('Checkout error:', error);
@@ -405,11 +505,11 @@ const StaffPosPage: React.FC = () => {
 
                   {/* Checkout Button */}
                   <button
-                    onClick={handleCheckout}
-                    disabled={loading}
+                    onClick={generateInvoice}
+                    disabled={isGeneratingInvoice}
                     className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold py-3 rounded-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition transform hover:scale-105"
                   >
-                    {loading ? '⏳ Đang xử lý...' : '✅ Thanh toán'}
+                    {isGeneratingInvoice ? '⏳ Đang tạo hóa đơn...' : '📄 Tạo hóa đơn'}
                   </button>
                 </>
               )}
@@ -417,6 +517,126 @@ const StaffPosPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && invoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 sticky top-0">
+              <h2 className="text-2xl font-bold">📄 Biên Lai Bán Hàng</h2>
+              <p className="text-blue-100 text-sm mt-1">Mã HĐ: {invoice.invoiceCode}</p>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {/* Invoice Info */}
+              <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-200">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-600 uppercase font-semibold">
+                      Khách hàng
+                    </label>
+                    <p className="text-lg font-bold text-gray-900">{invoice.customerName}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 uppercase font-semibold">
+                      Nhân viên
+                    </label>
+                    <p className="text-lg font-bold text-gray-900">{invoice.staffName}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 uppercase font-semibold">
+                      Thời gian
+                    </label>
+                    <p className="text-sm text-gray-900">{invoice.createdAt}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 uppercase font-semibold">
+                      Thanh toán
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {invoice.paymentMethod === 'CASH' ? '💵 Tiền mặt' : '💳 Chuyển khoản'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="mb-6">
+                <h3 className="font-bold text-gray-900 mb-3">Chi tiết sản phẩm:</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 border-b-2 border-gray-300">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-semibold">Sản phẩm</th>
+                        <th className="text-center px-3 py-2 font-semibold w-16">SL</th>
+                        <th className="text-right px-3 py-2 font-semibold w-28">Đơn giá</th>
+                        <th className="text-right px-3 py-2 font-semibold w-32">Tổng</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.items.map((item) => (
+                        <tr key={item.productId} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-3 py-2">{item.productName}</td>
+                          <td className="text-center px-3 py-2 font-semibold">{item.quantity}</td>
+                          <td className="text-right px-3 py-2">
+                            {new Intl.NumberFormat('vi-VN').format(item.price)}đ
+                          </td>
+                          <td className="text-right px-3 py-2 font-bold text-blue-600">
+                            {new Intl.NumberFormat('vi-VN').format(item.subtotal)}đ
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-gray-900">TỔNG CỘNG:</span>
+                  <span className="text-3xl font-bold text-blue-600">
+                    {new Intl.NumberFormat('vi-VN', {
+                      style: 'currency',
+                      currency: 'VND',
+                    }).format(invoice.totalAmount)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Receipt Preview */}
+              <div className="mb-6 bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                <pre className="whitespace-pre-wrap break-words">{printFormat}</pre>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handlePrintInvoice}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition"
+                >
+                  🖨️ In hóa đơn
+                </button>
+                <button
+                  onClick={handleConfirmPayment}
+                  disabled={loading}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:shadow-lg text-white font-bold py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {loading ? '⏳ Đang xử lý...' : '✅ Xác nhận thanh toán'}
+                </button>
+                <button
+                  onClick={() => setShowInvoiceModal(false)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition"
+                >
+                  ❌ Huỷ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

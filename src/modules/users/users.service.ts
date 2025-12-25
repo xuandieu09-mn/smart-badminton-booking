@@ -112,7 +112,12 @@ export class UsersService {
    */
   async updateUser(
     userId: number,
-    data: { name?: string; role?: string; isActive?: boolean; lockReason?: string },
+    data: {
+      name?: string;
+      role?: string;
+      isActive?: boolean;
+      lockReason?: string;
+    },
   ) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({

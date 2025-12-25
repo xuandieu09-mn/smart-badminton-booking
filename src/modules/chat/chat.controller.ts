@@ -1,83 +1,66 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Get,
-  HttpCode,
-  HttpStatus,
-  UseGuards,
-  Logger,
-  Req,
-} from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
+import { AuthGuard } from '@nestjs/passport';
 import { ChatService } from './chat.service';
-import { ChatMessageDto, ChatResponseDto } from './dto/chat.dto';
-import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
+import { ChatMessageDto } from './dto/chat.dto';
+
+/**
+ * 🔐 Interface for authenticated request user
+ */
+interface RequestUser {
+  id?: number;
+  userId?: number;
+}
 
 @Controller('chat')
 export class ChatController {
-  private readonly logger = new Logger(ChatController.name);
-
   constructor(private readonly chatService: ChatService) {}
 
   /**
-   * 💬 POST /api/chat
-   * Gửi tin nhắn cho AI Assistant (Agentic AI with Function Calling)
-   * - Nếu đã đăng nhập: userId được truyền cho AI → có thể đặt sân
-   * - Nếu chưa đăng nhập: vẫn chat được, nhưng không đặt sân được
+   * 💬 POST /chat - Send message to AI
+   * @param body - ChatMessageDto containing message and optional history
+   * @param req - Express Request object
+   * @returns JSON { reply: string }
    */
   @Post()
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(OptionalJwtAuthGuard)
   async chat(
-    @Body() dto: ChatMessageDto,
-    @Req() req: any,
-  ): Promise<ChatResponseDto> {
-    const startTime = Date.now();
+    @Body() body: ChatMessageDto,
+    @Req() req: Request,
+  ): Promise<{ reply: string }> {
+    // Extract userId from request user
+    // Không cần userId nếu chưa đăng nhập
+    let userId: number | null = null;
+    if (req.user) {
+      const user = req.user as RequestUser;
+      userId = this.extractUserId(user);
+    }
 
-    // Extract userId if authenticated (can be null for unauthenticated users)
-    const userId: number | null = req.user?.id ?? null;
-    this.logger.log(
-      `📨 Chat request - userId: ${userId}, message: "${dto.message}"`,
+    // Generate AI response (history is managed internally by ChatService)
+    const reply = await this.chatService.generateResponse(
+      body.message,
+      userId,
     );
 
-    try {
-      const reply = await this.chatService.generateResponse(
-        dto.message,
-        userId,
-      );
-
-      const processingTime = Date.now() - startTime;
-      this.logger.log(`✅ Chat response sent in ${processingTime}ms`);
-
-      return {
-        reply,
-        processingTime,
-      };
-    } catch (error) {
-      // ⚠️ CRITICAL: Catch any unhandled errors to prevent 500
-      this.logger.error('❌ UNHANDLED CHAT ERROR:', error.message);
-      this.logger.error('❌ Stack:', error.stack);
-
-      const processingTime = Date.now() - startTime;
-      return {
-        reply: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau! 🙏',
-        processingTime,
-      };
-    }
+    return { reply };
   }
 
   /**
-   * 🔍 GET /api/chat/status
-   * Kiểm tra trạng thái AI
+   * 🔧 Extract user ID from request user object
+   * @param user - Request user object (may have id or userId)
+   * @returns User ID as number, or null if not found
    */
-  @Get('status')
-  getStatus() {
-    const available = this.chatService.isAvailable();
-    return {
-      available,
-      message: available
-        ? 'AI Assistant đang sẵn sàng phục vụ! 🤖'
-        : 'AI Assistant đang bảo trì. Vui lòng thử lại sau.',
-    };
+  private extractUserId(user: RequestUser): number | null {
+    if (!user) {
+      return null;
+    }
+
+    // Check for 'id' first, then 'userId'
+    const rawId = user.id ?? user.userId;
+
+    if (typeof rawId === 'number' && !isNaN(rawId)) {
+      return rawId;
+    }
+
+    return null;
   }
 }

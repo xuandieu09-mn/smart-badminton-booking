@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { RevenueService } from './revenue.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -9,6 +10,12 @@ import { Role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class RevenueController {
   constructor(private revenueService: RevenueService) {}
+
+  // Typed request with JWT payload
+  private getUserId(req: Request): number {
+    const user = (req as Request & { user?: { sub?: number } }).user;
+    return typeof user?.sub === 'number' ? user.sub : Number(user?.sub);
+  }
 
   /**
    * 📊 GET /api/revenue/summary?date=YYYY-MM-DD
@@ -30,13 +37,13 @@ export class RevenueController {
 
   @Get('shift')
   @Roles(Role.STAFF, Role.ADMIN)
-  async getShiftRevenue(@Req() req: any) {
-    return this.revenueService.getShiftRevenue(req.user.sub);
+  async getShiftRevenue(@Req() req: Request) {
+    return this.revenueService.getShiftRevenue(this.getUserId(req));
   }
 
   @Post('close-shift')
   @Roles(Role.STAFF)
-  async closeShift(@Req() req: any) {
-    return this.revenueService.closeShift(req.user.sub);
+  async closeShift(@Req() req: Request) {
+    return this.revenueService.closeShift(this.getUserId(req));
   }
 }

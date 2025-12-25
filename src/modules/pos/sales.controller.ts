@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/sale.dto';
+import { GenerateInvoiceDto } from './dto/invoice.dto';
+import { InvoiceService } from './invoice.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -19,7 +21,28 @@ import { Role } from '@prisma/client';
 @Controller('pos/sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
-  constructor(private salesService: SalesService) {}
+  constructor(
+    private salesService: SalesService,
+    private invoiceService: InvoiceService,
+  ) {}
+
+  @Post('generate-invoice')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async generateInvoice(@Body() dto: GenerateInvoiceDto, @Req() req: any) {
+    const staffId = req.user?.sub || req.user?.id;
+    if (!staffId) {
+      throw new Error('Staff ID not found in request');
+    }
+
+    const invoice = await this.invoiceService.generateInvoicePreview(dto, staffId);
+    const printFormat = this.invoiceService.formatInvoiceForPrint(invoice);
+
+    return {
+      message: 'Invoice generated successfully',
+      invoice,
+      printFormat,
+    };
+  }
 
   @Post()
   @Roles(Role.STAFF, Role.ADMIN)

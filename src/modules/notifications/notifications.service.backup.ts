@@ -382,16 +382,18 @@ export class NotificationsService {
    * 🎯 NEW BOOKING - Notify Staff & Admin
    */
   async notifyNewBooking(booking: any) {
-    this.logger.log(`🎯 [START] notifyNewBooking called for #${booking.bookingCode}`);
-    
+    this.logger.log(
+      `🎯 [START] notifyNewBooking called for #${booking.bookingCode}`,
+    );
+
     const courtName = booking.court?.name || `Sân ${booking.courtId}`;
     const customerName = booking.guestName || booking.user?.name || 'Khách';
-    
+
     // Format time
     const startTime = new Date(booking.startTime);
     const endTime = new Date(booking.endTime);
     const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-    
+
     const message = `Đơn đặt sân mới #${booking.bookingCode}\n📍 ${courtName}\n⏰ ${timeStr}\n👤 ${customerName}`;
 
     this.logger.log(`🔍 [DEBUG] Creating notification in DB...`);
@@ -404,7 +406,9 @@ export class NotificationsService {
     });
 
     // Emit to staff room
-    this.logger.log(`🔍 [DEBUG] Calling emitToStaffAndAdmin('notification:new')...`);
+    this.logger.log(
+      `🔍 [DEBUG] Calling emitToStaffAndAdmin('notification:new')...`,
+    );
     await this.eventsGateway.emitToStaffAndAdmin('notification:new', {
       title: '🎯 Đơn đặt sân mới',
       message,
@@ -421,12 +425,12 @@ export class NotificationsService {
   async notifyBookingCancelled(booking: any, cancelledBy: string) {
     const customerName = booking.guestName || booking.user?.name || 'Khách';
     const courtName = booking.court?.name || `Sân ${booking.courtId}`;
-    
+
     // Format time
     const startTime = new Date(booking.startTime);
     const endTime = new Date(booking.endTime);
     const timeStr = `${startTime.toLocaleDateString('vi-VN')} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-    
+
     const message = `🚨 Khách "${customerName}" đã HỦY lịch!\n📍 ${courtName}\n⏰ ${timeStr}\n🔓 Slot này giờ TRỐNG - có thể bán cho khách walk-in!`;
 
     await this.createAndEmitNotification({
@@ -449,7 +453,7 @@ export class NotificationsService {
       bookingId: booking.id,
       priority: 'HIGH',
     });
-    
+
     this.logger.log(`⚠️ Cancellation notification sent to staff & admin`);
   }
 
@@ -457,13 +461,15 @@ export class NotificationsService {
    * 💰 PAYMENT SUCCESS - Notify Staff & Admin
    */
   async notifyPaymentSuccess(payment: any, booking: any) {
-    this.logger.log(`💰 [START] notifyPaymentSuccess called for booking #${booking.bookingCode}`);
-    
+    this.logger.log(
+      `💰 [START] notifyPaymentSuccess called for booking #${booking.bookingCode}`,
+    );
+
     const amount = new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
     }).format(Number(payment.amount));
-    
+
     const courtName = booking.court?.name || `Sân ${booking.courtId}`;
     const customerName = booking.guestName || booking.user?.name || 'Khách';
     const paymentMethod = payment.method || 'N/A';
@@ -484,7 +490,9 @@ export class NotificationsService {
     });
 
     // Emit to staff & admin
-    this.logger.log(`🔍 [DEBUG] Calling emitToStaffAndAdmin for payment notification...`);
+    this.logger.log(
+      `🔍 [DEBUG] Calling emitToStaffAndAdmin for payment notification...`,
+    );
     await this.eventsGateway.emitToStaffAndAdmin('notification:new', {
       title: '💰 Thanh toán thành công',
       message,
@@ -495,7 +503,9 @@ export class NotificationsService {
 
     // Also notify customer
     if (booking.userId) {
-      this.logger.log(`🔍 [DEBUG] Also notifying customer ${booking.userId}...`);
+      this.logger.log(
+        `🔍 [DEBUG] Also notifying customer ${booking.userId}...`,
+      );
       await this.createAndEmitNotification({
         userId: booking.userId,
         title: '✅ Thanh toán thành công',
@@ -503,7 +513,7 @@ export class NotificationsService {
         type: NotificationType.SUCCESS,
         metadata: { bookingId: booking.id, amount: payment.amount },
       });
-      
+
       // Emit to customer's room
       this.eventsGateway.emitToUser(booking.userId, 'notification:new', {
         title: '✅ Thanh toán thành công',
@@ -512,7 +522,9 @@ export class NotificationsService {
       });
     }
 
-    this.logger.log(`✅ [END] Payment notification sent to staff, admin & customer`);
+    this.logger.log(
+      `✅ [END] Payment notification sent to staff, admin & customer`,
+    );
   }
 
   /**

@@ -20,7 +20,7 @@ import { Role, PaymentMethod, BookingType } from '@prisma/client';
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Định nghĩa giờ hoạt động
-const OPERATING_HOURS = { start: 6, end: 22 };
+const OPERATING_HOURS = { start: 6, end: 21 };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🧠 SYSTEM INSTRUCTION V2 - Enhanced with Hardcoded Context
@@ -50,63 +50,61 @@ lời chính xác dựa trên dữ liệu có sẵn.
 - Website: www.smartcourt.vn
 
 ⏰ **Giờ hoạt động:**
-- Thứ 2 - Thứ 6: 6:00 - 22:00
-- Thứ 7 - Chủ nhật: 6:00 - 23:00
-- Nghỉ lễ: Giảm 20% giờ cao điểm
+- TẤT CẢ CÁC NGÀY: 6:00 - 21:00 (từ thứ 2 đến Chủ nhật)
+- Không nghỉ lễ, phục vụ liên tục
 
-💰 **BẢNG GIÁ SÂN (Chi tiết từng khung giờ):**
+💰 **BẢNG GIÁ SÂN (2 khung giờ duy nhất):**
 
 | Khung giờ          | Giá/giờ     | Ghi chú                    |
 |--------------------|-------------|----------------------------|
-| 06:00 - 08:00      | 50.000đ     | Khung sáng sớm - Rẻ nhất   |
-| 08:00 - 12:00      | 70.000đ     | Khung sáng                 |
-| 12:00 - 14:00      | 60.000đ     | Khung trưa - Ưu đãi        |
-| 14:00 - 17:00      | 80.000đ     | Khung chiều                |
-| 17:00 - 20:00      | 120.000đ    | Khung tối - Cao điểm       |
-| 20:00 - 22:00      | 100.000đ    | Khung tối muộn             |
-| Sau 22:00          | Đóng cửa    | Không phục vụ              |
+| 06:00 - 17:00      | 50.000đ     | Khung giờ thường           |
+| 17:00 - 21:00      | 100.000đ    | Khung giờ cao điểm         |
+| Sau 21:00          | Đóng cửa    | Không phục vụ              |
 
 📝 **CHÍNH SÁCH ĐẶT SÂN:**
 - Đặt tối thiểu: 1 giờ
 - Đặt tối đa: 4 giờ/lần (nếu cần thêm phải liên hệ staff)
-- Cọc trước: 50% tổng tiền (qua ví điện tử hoặc VNPay)
-- Thanh toán còn lại: Trực tiếp khi check-in
+- Thanh toán: **100% TRƯỚC** khi đặt sân (qua ví điện tử hoặc VNPay)
+- KHÔNG áp dụng đặt cọc, phải thanh toán full
 
 ⚠️ **CHÍNH SÁCH HỦY SÂN:**
-- Hủy trước 24h: Hoàn 100% cọc
-- Hủy trước 12h: Hoàn 50% cọc
+- Hủy trước 24h: Hoàn 100% tiền
+- Hủy trước 12h: Hoàn 50% tiền
 - Hủy dưới 12h: KHÔNG hoàn tiền
-- Trễ hơn 15 phút: Tự động hủy, mất cọc
+- Trễ hơn 15 phút: Tự động hủy, không hoàn tiền
 
 🏸 **THÔNG TIN SÂN:**
-Hiện có 5 sân cầu lông tiêu chuẩn thi đấu:
-- Sân 1, 2, 3: Sân VIP (Thảm cao cấp, ánh sáng LED)
-- Sân 4, 5: Sân thường (Chất lượng tốt, giá chuẩn)
+Hiện có **5 sân cầu lông tiêu chuẩn** (không có sân VIP):
+- Sân 1, 2, 3, 4, 5: Sân thường, chất lượng tốt, giá đồng nhất
 - Tất cả sân đều có điều hòa, camera giám sát
 
 🛒 **SẢN PHẨM POS PHỔ BIẾN (Tham khảo - Có thể thay đổi):**
 
-**Đồ uống:**
-- Nước Revive (500ml): 15.000đ
-- Nước Sting (330ml): 15.000đ
-- Aquafina (500ml): 10.000đ
-- Redbull (250ml): 20.000đ
-- Coca Cola (330ml): 12.000đ
+**Cầu lông:**
+- Cầu RSL Classic (12 quả): 120.000đ
+- Cầu Yonex AS30 (12 quả): 180.000đ
+- Cầu Victor Gold (12 quả): 150.000đ
 
-**Thực phẩm:**
-- Bánh mì thịt: 25.000đ
-- Xúc xích nướng: 15.000đ
-- Snack Oishi: 8.000đ
+**Đồ uống:**
+- Nước Aquafina 500ml: 10.000đ
+- Nước Revive 500ml: 15.000đ
+- Trà đào Cozy 450ml: 12.000đ
+- Nước Sting 330ml: 12.000đ
 
 **Phụ kiện:**
-- Vợt Yonex (Cơ bản): 450.000đ
-- Vợt Victor (Trung cấp): 650.000đ
-- Giày Lining: 850.000đ - 1.200.000đ
-- Cầu Yonex (1 hộp 12 quả): 180.000đ
-- Quấn cán vợt: 25.000đ/cái
+- Quấn cán vợt: 25.000đ
+- Băng đô thấm mồ hôi: 30.000đ
+- Vỏ vợt cầu lông: 50.000đ
 
-*Lưu ý: Giá trên chỉ mang tính chất tham khảo. Để biết giá chính xác và 
-sản phẩm còn hàng, vui lòng sử dụng chức năng tra cứu POS (nếu đã đăng nhập).*
+**Thiết bị:**
+- Vợt Yonex Astrox: 1.500.000đ
+- Giày cầu lông Kawasaki: 450.000đ
+
+**Khác:**
+- Khăn mặt: 35.000đ
+- Dây vợt thay thế (BG65): 80.000đ
+
+*Lưu ý: Giá trên lấy từ database. Để biết tồn kho real-time, dùng chức năng tra cứu POS (nếu đã đăng nhập).*
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -148,14 +146,13 @@ Bạn có 4 công cụ để tra cứu dữ liệu thời gian thực từ datab
 
 💡 **Ví dụ:**
 👤 "Sân giá bao nhiêu vào chiều?"
-🤖 "🏸 **Giá sân khung chiều (14:00 - 17:00): 80.000đ/giờ**
-     Nếu bạn đặt khung tối (17:00 - 20:00) sẽ là 120.000đ/giờ (cao điểm).
+🤖 "🏸 **Giá sân:**
+     - Khung 6h-17h (bao gồm chiều): **50.000đ/giờ**
+     - Khung 17h-21h (cao điểm): **100.000đ/giờ**
      Bạn muốn đặt sân không ạ?"
 
 👤 "Mấy giờ mở cửa?"
-🤖 "⏰ SmartCourt mở cửa:
-     - Thứ 2-6: **6:00 - 22:00**
-     - Thứ 7-CN: **6:00 - 23:00**
+🤖 "⏰ SmartCourt mở cửa **6:00 - 21:00** tất cả các ngày trong tuần!
      Bạn muốn đặt sân khung giờ nào ạ? 🏸"
 
 ❌ **CÂU HỎI NGOÀI PHẠM VI (Từ chối lịch sự):**
@@ -224,18 +221,18 @@ Luôn thân thiện, chính xác, và hướng khách về hành động tiếp 
 const GET_POS_PRODUCTS: FunctionDeclaration = {
   name: 'get_pos_products',
   description:
-    'Tra cứu danh sách sản phẩm đang bán tại quầy POS (nước uống, vợt, giày, phụ kiện). Gọi khi khách hỏi về menu, đồ uống, sản phẩm, hoặc muốn mua hàng.',
+    '🆕 PHASE 3: Tra cứu sản phẩm POS (đồ uống, cầu, vợt, phụ kiện). GỌI KHI: khách hỏi về menu, giá sản phẩm, "có gì?", "bán gì?", "nước gì?", "vợt gì?". KHÔNG GỌI khi hỏi về giá sân (dùng fallback).',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       keyword: {
         type: SchemaType.STRING,
-        description: 'Từ khóa tìm kiếm (tùy chọn). VD: "nước", "vợt", "giày"',
+        description: 'Từ khóa tìm kiếm (tùy chọn). VD: "nước", "vợt", "cầu", "revive"',
       },
       category: {
         type: SchemaType.STRING,
         description:
-          'Loại sản phẩm: DRINK, EQUIPMENT, ACCESSORY, FOOD (tùy chọn)',
+          'Loại sản phẩm: DRINK (nước uống), EQUIPMENT (vợt, cầu), ACCESSORY (phụ kiện), FOOD (đồ ăn)',
         format: 'enum',
         enum: ['DRINK', 'EQUIPMENT', 'ACCESSORY', 'FOOD'],
       },
@@ -244,16 +241,17 @@ const GET_POS_PRODUCTS: FunctionDeclaration = {
   },
 };
 
+
 const CREATE_BOOKING: FunctionDeclaration = {
   name: 'create_booking',
   description:
-    'Đặt sân cầu lông cho khách. CHỈ gọi khi đã có ĐỦ thông tin: sân nào (courtId), ngày nào, giờ nào, bao lâu. PHẢI xác nhận lại trước khi gọi.',
+    '🆕 PHASE 3: Đặt sân cầu lông cho khách. GỌI 2 LẦN: (1) Lần đầu KHÔNG có confirmed → hiện thông tin xác nhận. (2) Sau khi khách nói "Có"/"Đồng ý" → gọi LẦN 2 với confirmed=true để thực thi.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       courtId: {
         type: SchemaType.NUMBER,
-        description: 'Số sân (1, 2, 3...). VD: khách nói "sân 1" → courtId = 1',
+        description: 'Số sân (1-5). VD: "sân 1" → courtId = 1',
       },
       date: {
         type: SchemaType.STRING,
@@ -265,7 +263,12 @@ const CREATE_BOOKING: FunctionDeclaration = {
       },
       duration: {
         type: SchemaType.NUMBER,
-        description: 'Số giờ đặt (1, 2, 3...). Mặc định 1 nếu không nói.',
+        description: 'Số giờ đặt (1-8). Mặc định 1 nếu không nói.',
+      },
+      confirmed: {
+        type: SchemaType.BOOLEAN,
+        description:
+          '🆕 PHASE 3: true khi khách đã xác nhận "Có"/"Đồng ý". Lần đầu KHÔNG truyền (hoặc false).',
       },
     },
     required: ['courtId', 'date', 'time', 'duration'],
@@ -275,14 +278,14 @@ const CREATE_BOOKING: FunctionDeclaration = {
 const GET_COURT_AVAILABILITY: FunctionDeclaration = {
   name: 'get_court_availability',
   description:
-    'Kiểm tra sân trống theo ngày. Gọi khi khách hỏi "còn sân không", "sân nào trống", "tối nay có sân không".',
+    '🆕 PHASE 3: Kiểm tra sân trống theo ngày. GỌI KHI: khách hỏi "còn sân không?", "sân nào trống?", "tối nay có sân không?", "ngày mai còn sân?". Hiển thị danh sách khung giờ và sân available.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       date: {
         type: SchemaType.STRING,
         description:
-          'Ngày cần xem (YYYY-MM-DD). Mặc định hôm nay nếu không có.',
+          'Ngày cần xem (YYYY-MM-DD). Mặc định hôm nay nếu không có. VD: "ngày mai" → parse thành 2025-12-22',
       },
     },
     required: [],
@@ -292,14 +295,14 @@ const GET_COURT_AVAILABILITY: FunctionDeclaration = {
 const GET_USER_BOOKINGS: FunctionDeclaration = {
   name: 'get_user_bookings',
   description:
-    'Xem lịch đặt sân của khách hàng. Gọi khi khách hỏi "tôi đã đặt gì", "xem lịch của tôi", "booking của tôi".',
+    '🆕 PHASE 3: Xem lịch đặt sân của khách hàng. GỌI KHI: khách hỏi "tôi đã đặt gì?", "xem lịch của tôi", "booking của tôi", "lịch sử đặt sân". YÊU CẦU đăng nhập (userId != null).',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       status: {
         type: SchemaType.STRING,
         description:
-          'Lọc theo trạng thái: CONFIRMED, PENDING_PAYMENT, hoặc ALL',
+          'Lọc theo trạng thái: CONFIRMED (đã xác nhận), PENDING_PAYMENT (chưa thanh toán), hoặc ALL (tất cả)',
         format: 'enum',
         enum: ['CONFIRMED', 'PENDING_PAYMENT', 'ALL'],
       },
@@ -409,6 +412,7 @@ export class ChatService implements OnModuleInit {
 
   /**
    * 📦 get_pos_products - Tra cứu sản phẩm từ database
+   * 🆕 PHASE 3: Enhanced with suggested actions & better error messages
    */
   private async handleGetPosProducts(args: {
     keyword?: string;
@@ -436,8 +440,14 @@ export class ChatService implements OnModuleInit {
       if (products.length === 0) {
         return {
           success: true,
-          message: 'Không tìm thấy sản phẩm phù hợp',
+          message: '❌ **Không tìm thấy sản phẩm**\n\n💡 Vui lòng thử từ khóa khác hoặc xem tất cả sản phẩm.',
           products: [],
+          // 🆕 PHASE 3: Suggested actions when no results
+          suggestedActions: [
+            '📋 Xem tất cả sản phẩm (không lọc)',
+            '🏸 Đặt sân cầu lông',
+            '📅 Xem sân trống',
+          ],
         };
       }
 
@@ -453,20 +463,27 @@ export class ChatService implements OnModuleInit {
 
       return {
         success: true,
-        message: `Tìm thấy ${products.length} sản phẩm`,
+        message: `✅ Tìm thấy **${products.length} sản phẩm**`,
         products: productList,
+        // 🆕 PHASE 3: Suggested actions after showing products
+        suggestedActions: [
+          '🏸 Đặt sân để chơi',
+          '📅 Xem lịch sân trống hôm nay',
+          '📦 Xem thêm sản phẩm khác',
+        ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_pos_products: ${error.message}`);
       return {
         success: false,
-        error: 'Không thể tra cứu sản phẩm lúc này',
+        error: '❌ **Không thể tra cứu sản phẩm lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
 
   /**
    * 📅 create_booking - Đặt sân từ database
+   * 🆕 PHASE 3: Added confirmation step, enhanced validation & suggested actions
    */
   private async handleCreateBooking(
     args: {
@@ -474,6 +491,7 @@ export class ChatService implements OnModuleInit {
       date: string;
       time: string;
       duration: number;
+      confirmed?: boolean; // 🆕 PHASE 3: Confirmation flag
     },
     userId: number | null,
   ): Promise<object> {
@@ -482,10 +500,19 @@ export class ChatService implements OnModuleInit {
         `📅 [Function] create_booking: ${JSON.stringify(args)}, userId: ${userId}`,
       );
 
+      // 🆕 PHASE 3: Enhanced validation with detailed error messages
       if (!userId) {
         return {
           success: false,
-          error: 'Bạn cần đăng nhập để đặt sân. Vui lòng đăng nhập trước!',
+          error: '🔒 **Bạn cần đăng nhập để đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
+        };
+      }
+
+      // 🆕 PHASE 3: Input validation
+      if (!args.courtId || !args.date || !args.time || !args.duration) {
+        return {
+          success: false,
+          error: '❌ **Thiếu thông tin đặt sân**\n\n📋 Vui lòng cung cấp:\n• Số sân (1-5)\n• Ngày (VD: 2025-12-22)\n• Giờ (VD: 18:00)\n• Thời lượng (VD: 2 giờ)',
         };
       }
 
@@ -497,18 +524,61 @@ export class ChatService implements OnModuleInit {
       const endDateTime = new Date(startDateTime);
       endDateTime.setHours(endDateTime.getHours() + args.duration);
 
-      // Validate
+      // 🆕 PHASE 3: Enhanced validation with detailed messages
       if (startDateTime < new Date()) {
         return {
           success: false,
-          error: 'Không thể đặt sân trong quá khứ',
+          error: '⏰ **Không thể đặt sân trong quá khứ**\n\n💡 Vui lòng chọn thời gian trong tương lai.',
         };
       }
 
       if (hour < OPERATING_HOURS.start || hour >= OPERATING_HOURS.end) {
         return {
           success: false,
-          error: `Giờ hoạt động: ${OPERATING_HOURS.start}:00 - ${OPERATING_HOURS.end}:00`,
+          error: `🕐 **Ngoài giờ hoạt động**\n\n⏰ Sân mở cửa: **${OPERATING_HOURS.start}:00 - ${OPERATING_HOURS.end}:00** hàng ngày.\n\n💡 Vui lòng chọn giờ trong khung giờ hoạt động.`,
+        };
+      }
+
+      // 🆕 PHASE 3: Court ID validation
+      if (args.courtId < 1 || args.courtId > 5) {
+        return {
+          success: false,
+          error: '🏸 **Số sân không hợp lệ**\n\n✅ Sân khả dụng: **Sân 1, 2, 3, 4, 5**\n\n💡 Vui lòng chọn số sân từ 1 đến 5.',
+        };
+      }
+
+      // 🆕 PHASE 3: Duration validation
+      if (args.duration < 1 || args.duration > 8) {
+        return {
+          success: false,
+          error: '⏱️ **Thời lượng không hợp lệ**\n\n✅ Thời lượng đặt sân: **1-8 giờ**\n\n💡 Vui lòng chọn thời lượng từ 1 đến 8 giờ.',
+        };
+      }
+
+      // 🆕 PHASE 3: CONFIRMATION STEP - Ask before booking
+      if (!args.confirmed) {
+        // Calculate price
+        const isPeakHour = hour >= 17; // 17h-21h = peak
+        const pricePerHour = isPeakHour ? 100000 : 50000;
+        const totalPrice = pricePerHour * args.duration;
+        
+        const dateFormatted = startDateTime.toLocaleDateString('vi-VN', {
+          weekday: 'long',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+
+        return {
+          success: false,
+          requiresConfirmation: true,
+          message: `📋 **Xác nhận thông tin đặt sân:**\n\n🏸 **Sân:** Sân ${args.courtId}\n📅 **Ngày:** ${dateFormatted}\n🕐 **Giờ:** ${args.time} - ${endDateTime.getHours()}:${String(endDateTime.getMinutes()).padStart(2, '0')}\n⏱️ **Thời lượng:** ${args.duration} giờ\n💰 **Tổng tiền:** ${totalPrice.toLocaleString('vi-VN')}đ ${isPeakHour ? '(Giờ cao điểm)' : '(Giờ thường)'}\n\n✅ Bạn có chắc chắn muốn đặt sân này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận đặt sân.`,
+          bookingInfo: {
+            courtId: args.courtId,
+            date: args.date,
+            time: args.time,
+            duration: args.duration,
+          },
         };
       }
 
@@ -527,9 +597,10 @@ export class ChatService implements OnModuleInit {
 
       const bookingData = result.booking;
 
+      // 🆕 PHASE 3: Enhanced success response with suggested actions
       return {
         success: true,
-        message: 'Đặt sân thành công!',
+        message: '✅ **Đặt sân thành công!**',
         booking: {
           bookingCode: bookingData.bookingCode,
           courtName: bookingData.court?.name,
@@ -540,36 +611,51 @@ export class ChatService implements OnModuleInit {
           status: bookingData.status,
           paymentStatus: bookingData.paymentStatus,
         },
+        // 🆕 PHASE 3: Suggested actions
+        suggestedActions: [
+          '💰 Thanh toán ngay để xác nhận booking',
+          '🥤 Xem menu đồ uống và sản phẩm',
+          '📋 Xem tất cả lịch đặt sân của bạn',
+        ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in create_booking: ${error.message}`);
 
+      // 🆕 PHASE 3: Enhanced error handling with detailed Vietnamese messages
       if (
         error.message?.includes('already booked') ||
         error.message?.includes('ConflictException')
       ) {
         return {
           success: false,
-          error: 'Sân đã được đặt trong khung giờ này. Vui lòng chọn giờ khác!',
+          error: '⚠️ **Sân đã được đặt**\n\n❌ Sân này đã có người đặt trong khung giờ bạn chọn.\n\n💡 **Gợi ý:**\n• Chọn giờ khác\n• Chọn sân khác\n• Hỏi "còn sân nào trống?" để xem lịch',
         };
       }
 
       if (error.message?.includes('Court not found')) {
         return {
           success: false,
-          error: 'Không tìm thấy sân. Vui lòng kiểm tra lại số sân!',
+          error: '🏸 **Không tìm thấy sân**\n\n❌ Sân bạn chọn không tồn tại hoặc đã ngừng hoạt động.\n\n💡 Vui lòng chọn số sân từ **1 đến 5**.',
+        };
+      }
+
+      if (error.message?.includes('Insufficient balance')) {
+        return {
+          success: false,
+          error: '💰 **Số dư không đủ**\n\n❌ Tài khoản của bạn không đủ tiền để đặt sân.\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.',
         };
       }
 
       return {
         success: false,
-        error: `Không thể đặt sân: ${error.message}`,
+        error: `❌ **Không thể đặt sân**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại hoặc liên hệ hotline: **1900-8888**`,
       };
     }
   }
 
   /**
    * 🏸 get_court_availability - Xem sân trống
+   * 🆕 PHASE 3: Enhanced with suggested actions & better formatting
    */
   private async handleGetCourtAvailability(args: {
     date?: string;
@@ -590,7 +676,7 @@ export class ChatService implements OnModuleInit {
       if (courts.length === 0) {
         return {
           success: true,
-          message: 'Hiện tại không có sân nào trong hệ thống',
+          message: '❌ **Hiện tại không có sân nào trong hệ thống**\n\n💡 Vui lòng liên hệ hotline: **1900-8888**',
           courts: [],
         };
       }
@@ -671,8 +757,12 @@ export class ChatService implements OnModuleInit {
         year: 'numeric',
       });
 
+      // 🆕 PHASE 3: Enhanced response with suggested actions
       return {
         success: true,
+        message: slots.filter(s => !s.isFull).length > 0 
+          ? `✅ Tìm thấy **${slots.filter(s => !s.isFull).length}** khung giờ còn trống` 
+          : '⚠️ **Tất cả khung giờ đã đầy**',
         date: formatDate,
         dateKey,
         totalCourts: courts.length,
@@ -687,18 +777,31 @@ export class ChatService implements OnModuleInit {
           fullyBookedSlots: slots.filter((s) => s.isFull).length,
           availableSlots: slots.filter((s) => !s.isFull).length,
         },
+        // 🆕 PHASE 3: Suggested actions after viewing availability
+        suggestedActions: slots.filter(s => !s.isFull).length > 0 
+          ? [
+              '🏸 Đặt sân ngay (nếu đã đăng nhập)',
+              '📅 Xem sân trống ngày khác',
+              '🥤 Xem menu đồ uống',
+            ]
+          : [
+              '📅 Xem sân trống ngày mai',
+              '📋 Xem lịch đặt của bạn',
+              '🥤 Xem menu đồ uống',
+            ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_court_availability: ${error.message}`);
       return {
         success: false,
-        error: 'Không thể tra cứu sân trống lúc này',
+        error: '❌ **Không thể tra cứu sân trống lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
 
   /**
    * 📋 get_user_bookings - Xem lịch đặt của user
+   * 🆕 PHASE 3: Enhanced with suggested actions & better error messages
    */
   private async handleGetUserBookings(
     args: { status?: string },
@@ -709,10 +812,11 @@ export class ChatService implements OnModuleInit {
         `📋 [Function] get_user_bookings: ${JSON.stringify(args)}, userId: ${userId}`,
       );
 
+      // 🆕 PHASE 3: Enhanced validation
       if (!userId) {
         return {
           success: false,
-          error: 'Bạn cần đăng nhập để xem lịch đặt sân',
+          error: '🔒 **Bạn cần đăng nhập để xem lịch đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
         };
       }
 
@@ -737,8 +841,14 @@ export class ChatService implements OnModuleInit {
       if (bookings.length === 0) {
         return {
           success: true,
-          message: 'Bạn chưa có lịch đặt sân nào sắp tới',
+          message: '📭 **Bạn chưa có lịch đặt sân nào sắp tới**',
           bookings: [],
+          // 🆕 PHASE 3: Suggested actions when no bookings
+          suggestedActions: [
+            '🏸 Đặt sân mới',
+            '📅 Xem sân trống hôm nay',
+            '🥤 Xem menu đồ uống',
+          ],
         };
       }
 
@@ -752,16 +862,31 @@ export class ChatService implements OnModuleInit {
         totalPrice: `${Number(b.totalPrice).toLocaleString('vi-VN')}đ`,
       }));
 
+      // 🆕 PHASE 3: Check for pending payments
+      const pendingPayments = bookings.filter(b => b.paymentStatus === 'UNPAID');
+
       return {
         success: true,
-        message: `Bạn có ${bookings.length} lịch đặt sân`,
+        message: `✅ Bạn có **${bookings.length} lịch đặt sân** sắp tới`,
         bookings: bookingList,
+        // 🆕 PHASE 3: Suggested actions based on booking status
+        suggestedActions: pendingPayments.length > 0
+          ? [
+              `💰 Thanh toán ${pendingPayments.length} booking chưa thanh toán`,
+              '🏸 Đặt thêm sân mới',
+              '📅 Xem sân trống',
+            ]
+          : [
+              '🏸 Đặt thêm sân mới',
+              '📅 Xem sân trống hôm nay',
+              '🥤 Xem menu đồ uống',
+            ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_user_bookings: ${error.message}`);
       return {
         success: false,
-        error: 'Không thể tra cứu lịch đặt sân',
+        error: '❌ **Không thể tra cứu lịch đặt sân**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
@@ -965,13 +1090,13 @@ export class ChatService implements OnModuleInit {
       return (
         '🏸 **Dịch vụ tại SmartCourt:**\n\n' +
         '**1️⃣ Đặt sân cầu lông:**\n' +
-        '• 5 sân tiêu chuẩn thi đấu\n' +
-        '• Giá từ 50.000đ - 120.000đ/giờ\n' +
+        '• 5 sân tiêu chuẩn\n' +
+        '• Giá: **50.000đ** (6-17h) | **100.000đ** (17-21h)\n' +
         '• Đặt online 24/7\n\n' +
         '**2️⃣ Quầy POS:**\n' +
-        '• Đồ uống (Revive, Sting, Coca...)\n' +
-        '• Vợt cầu lông (Yonex, Victor)\n' +
-        '• Phụ kiện (cầu, quấn cán...)\n\n' +
+        '• Cầu lông RSL, Yonex, Victor\n' +
+        '• Đồ uống (Aquafina, Revive, Sting...)\n' +
+        '• Phụ kiện (quấn cán, băng đô...)\n\n' +
         '**3️⃣ Tiện ích khác:**\n' +
         '• Điều hòa mát mẻ\n' +
         '• Camera giám sát 24/7\n' +
@@ -998,9 +1123,7 @@ export class ChatService implements OnModuleInit {
         '📞 **Hotline:** 1900-8888 (24/7)\n' +
         '📧 **Email:** support@smartcourt.vn\n' +
         '🌐 **Website:** www.smartcourt.vn\n\n' +
-        '⏰ **Giờ hoạt động:**\n' +
-        '• Thứ 2-6: 6:00 - 22:00\n' +
-        '• Thứ 7-CN: 6:00 - 23:00\n\n' +
+        '⏰ **Giờ hoạt động:** 6:00 - 21:00 (tất cả các ngày)\n\n' +
         '🏸 **Cơ sở vật chất:**\n' +
         '• 5 sân cầu lông tiêu chuẩn\n' +
         '• Điều hòa + ánh sáng LED\n' +
@@ -1063,10 +1186,10 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🏸 **Vợt cầu lông tại SmartCourt:**\n\n' +
-        '• **Vợt Yonex** (Cơ bản): 450.000đ\n' +
-        '• **Vợt Victor** (Trung cấp): 650.000đ\n' +
-        '• **Quấn cán vợt:** 25.000đ/cái\n\n' +
-        '💡 *Giá tham khảo. Vui lòng liên hệ staff hoặc đăng nhập để xem giá chính xác.*\n' +
+        '• **Vợt Yonex Astrox**: 1.500.000đ (cao cấp)\n' +
+        '• **Quấn cán vợt:** 25.000đ/cái\n' +
+        '• **Dây vợt thay thế (BG65):** 80.000đ\n\n' +
+        '💡 *Giá từ database. Đăng nhập để xem tồn kho real-time.*\n' +
         '📞 Hotline: **1900-8888**'
       );
     }
@@ -1083,11 +1206,10 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🥤 **Đồ uống tại SmartCourt:**\n\n' +
-        '• Nước Revive (500ml): **15.000đ**\n' +
-        '• Nước Sting (330ml): **15.000đ**\n' +
-        '• Aquafina (500ml): **10.000đ**\n' +
-        '• Redbull (250ml): **20.000đ**\n' +
-        '• Coca Cola (330ml): **12.000đ**\n\n' +
+        '• Nước Aquafina 500ml: **10.000đ**\n' +
+        '• Nước Revive 500ml: **15.000đ**\n' +
+        '• Trà đào Cozy 450ml: **12.000đ**\n' +
+        '• Nước Sting 330ml: **12.000đ**\n\n' +
         '💡 Muốn xem menu đầy đủ với giá real-time? Vui lòng đăng nhập! 🏸'
       );
     }
@@ -1102,9 +1224,10 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🏸 **Cầu lông tại SmartCourt:**\n\n' +
-        '• **Cầu Yonex** (hộp 12 quả): 180.000đ\n' +
-        '• **Cầu Lining** (hộp 12 quả): 150.000đ\n\n' +
-        '💡 *Giá tham khảo. Liên hệ staff để biết hàng còn không.*\n' +
+        '• **Cầu RSL Classic** (12 quả): 120.000đ\n' +
+        '• **Cầu Yonex AS30** (12 quả): 180.000đ\n' +
+        '• **Cầu Victor Gold** (12 quả): 150.000đ\n\n' +
+        '💡 *Giá từ database. Liên hệ staff để biết hàng còn không.*\n' +
         '📞 Hotline: **1900-8888**'
       );
     }
@@ -1113,14 +1236,17 @@ export class ChatService implements OnModuleInit {
     if (msg.includes('pos') || msg.includes('quầy')) {
       return (
         '🛒 **Quầy POS SmartCourt:**\n\n' +
+        '**Cầu lông:**\n' +
+        '• Cầu RSL Classic: 120.000đ\n' +
+        '• Cầu Yonex AS30: 180.000đ\n' +
+        '• Cầu Victor Gold: 150.000đ\n\n' +
         '**Đồ uống:**\n' +
-        '• Nước Revive: 15.000đ\n' +
-        '• Aquafina: 10.000đ\n' +
-        '• Redbull: 20.000đ\n\n' +
+        '• Aquafina 500ml: 10.000đ\n' +
+        '• Revive 500ml: 15.000đ\n' +
+        '• Sting 330ml: 12.000đ\n\n' +
         '**Phụ kiện:**\n' +
-        '• Vợt Yonex: 450.000đ\n' +
-        '• Vợt Victor: 650.000đ\n' +
-        '• Cầu Yonex (12 quả): 180.000đ\n\n' +
+        '• Quấn cán vợt: 25.000đ\n' +
+        '• Vợt Yonex Astrox: 1.500.000đ\n\n' +
         '📞 Hotline: **1900-8888**'
       );
     }
@@ -1136,8 +1262,8 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '⏰ **SmartCourt mở cửa:**\n\n' +
-        '• Thứ 2-6: **6:00 - 22:00**\n' +
-        '• Thứ 7-CN: **6:00 - 23:00**\n\n' +
+        '• **TẤT CẢ CÁC NGÀY:** 6:00 - 21:00\n\n' +
+        '💰 Giá sân: **50.000đ/h** (6-17h) | **100.000đ/h** (17-21h)\n\n' +
         'Bạn muốn đặt sân khung giờ nào ạ? 🏸'
       );
     }
@@ -1151,8 +1277,8 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '⏰ **SmartCourt đóng cửa:**\n\n' +
-        '• Thứ 2 - Thứ 6: **22:00**\n' +
-        '• Thứ 7 - Chủ nhật: **23:00**\n\n' +
+        '• **TẤT CẢ CÁC NGÀY:** 21:00\n\n' +
+        '💡 Khung cuối cùng: 20:00 - 21:00 (giá 100.000đ/h)\n\n' +
         'Bạn muốn đặt sân khung giờ nào ạ? 🏸'
       );
     }
@@ -1168,10 +1294,10 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '⚠️ **Chính sách hủy sân tại SmartCourt:**\n\n' +
-        '• **Hủy trước 24h:** Hoàn 100% tiền cọc\n' +
-        '• **Hủy trước 12h:** Hoàn 50% tiền cọc\n' +
-        '• **Hủy dưới 12h:** KHÔNG hoàn tiền cọc\n' +
-        '• **Trễ hơn 15 phút** khi đến sân: Booking tự động hủy và mất cọc.\n\n' +
+        '• **Hủy trước 24h:** Hoàn 100% tiền\n' +
+        '• **Hủy trước 12h:** Hoàn 50% tiền\n' +
+        '• **Hủy dưới 12h:** KHÔNG hoàn tiền\n' +
+        '• **Trễ hơn 15 phút** khi đến sân: Booking tự động hủy, không hoàn tiền.\n\n' +
         'Bạn có cần hỗ trợ đặt sân không ạ? 🏸'
       );
     }
@@ -1183,8 +1309,9 @@ export class ChatService implements OnModuleInit {
       (msg.includes('đặt') && msg.includes('trước'))
     ) {
       return (
-        '💰 **Chính sách đặt sân tại SmartCourt:**\n\n' +
-        'Bạn cần cọc trước **50%** tổng tiền sân để xác nhận đặt chỗ nhé.\n' +
+        '💰 **Chính sách thanh toán tại SmartCourt:**\n\n' +
+        'Bạn cần thanh toán **100%** tổng tiền sân để xác nhận đặt chỗ.\n' +
+        '⚠️ KHÔNG áp dụng đặt cọc, phải thanh toán full.\n' +
         'Thanh toán có thể qua ví điện tử hoặc VNPay ạ. 🏸'
       );
     }
@@ -1204,12 +1331,10 @@ export class ChatService implements OnModuleInit {
         '💰 **BẢNG GIÁ SÂN SMARTCOURT**\n\n' +
         '| Khung giờ | Giá/giờ | Ghi chú |\n' +
         '|-----------|---------|----------|\n' +
-        '| 06:00 - 08:00 | **50.000đ** | Sáng sớm - Rẻ nhất |\n' +
-        '| 08:00 - 12:00 | **70.000đ** | Khung sáng |\n' +
-        '| 12:00 - 14:00 | **60.000đ** | Khung trưa - Ưu đãi |\n' +
-        '| 14:00 - 17:00 | **80.000đ** | Khung chiều |\n' +
-        '| 17:00 - 20:00 | **120.000đ** | Tối - Cao điểm ⭐ |\n' +
-        '| 20:00 - 22:00 | **100.000đ** | Tối muộn |\n\n' +
+        '| 06:00 - 17:00 | **50.000đ** | Khung giờ thường |\n' +
+        '| 17:00 - 21:00 | **100.000đ** | Khung cao điểm ⭐ |\n\n' +
+        '⏰ Giờ hoạt động: 6:00 - 21:00 (tất cả các ngày)\n' +
+        '💳 Thanh toán: 100% trước khi đặt sân\n\n' +
         '📞 Hotline: **1900-8888**\n' +
         '🏸 Bạn muốn đặt sân không ạ?'
       );
@@ -1222,9 +1347,8 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🌅 **Giá sân buổi sáng:**\n\n' +
-        '• **06:00 - 08:00:** 50.000đ/giờ (Sáng sớm - Rẻ nhất) ⭐\n' +
-        '• **08:00 - 12:00:** 70.000đ/giờ (Khung sáng)\n\n' +
-        '💡 Khung sáng sớm (6-8h) là rẻ nhất trong ngày!\n' +
+        '• **06:00 - 17:00:** 50.000đ/giờ (Khung giờ thường)\n\n' +
+        '💡 Giá 50k/h áp dụng cả ngày từ 6h sáng đến 17h chiều!\n' +
         '🏸 Bạn muốn đặt sân sáng không ạ?'
       );
     }
@@ -1236,9 +1360,9 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🌤️ **Giá sân buổi chiều:**\n\n' +
-        '• **12:00 - 14:00:** 60.000đ/giờ (Khung trưa - Ưu đãi)\n' +
-        '• **14:00 - 17:00:** 80.000đ/giờ (Khung chiều)\n\n' +
-        '💡 Khung trưa (12-14h) có giá ưu đãi!\n' +
+        '• **06:00 - 17:00:** 50.000đ/giờ (Khung giờ thường)\n\n' +
+        '💡 Giá 50k/h áp dụng từ 6h sáng đến 17h chiều!\n' +
+        '⚠️ Từ 17h trở đi là khung cao điểm: 100.000đ/h\n' +
         '🏸 Bạn muốn đặt sân chiều không ạ?'
       );
     }
@@ -1255,9 +1379,9 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🌆 **Giá sân buổi tối:**\n\n' +
-        '• **17:00 - 20:00:** 120.000đ/giờ (Cao điểm) ⭐\n' +
-        '• **20:00 - 22:00:** 100.000đ/giờ (Tối muộn)\n\n' +
-        '💡 Khung 17-20h là cao điểm, đông khách nhất!\n' +
+        '• **17:00 - 21:00:** 100.000đ/giờ (Cao điểm) ⭐\n\n' +
+        '💡 Khung tối 17-21h là cao điểm, đông khách nhất!\n' +
+        '⏰ Sân đóng cửa lúc 21:00\n' +
         '🏸 Bạn muốn đặt sân tối không ạ?'
       );
     }
@@ -1276,12 +1400,10 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '💰 **Giá sân SmartCourt:**\n\n' +
-        '• **Sáng sớm (6-8h):** 50.000đ/giờ - Rẻ nhất ⭐\n' +
-        '• **Sáng (8-12h):** 70.000đ/giờ\n' +
-        '• **Trưa (12-14h):** 60.000đ/giờ - Ưu đãi\n' +
-        '• **Chiều (14-17h):** 80.000đ/giờ\n' +
-        '• **Tối (17-20h):** 120.000đ/giờ - Cao điểm\n' +
-        '• **Tối muộn (20-22h):** 100.000đ/giờ\n\n' +
+        '• **Khung thường (6h-17h):** 50.000đ/giờ\n' +
+        '• **Khung cao điểm (17h-21h):** 100.000đ/giờ ⭐\n\n' +
+        '⏰ Giờ hoạt động: 6:00 - 21:00 (tất cả các ngày)\n' +
+        '💳 Thanh toán: 100% trước khi đặt sân\n\n' +
         '🏸 Bạn muốn đặt khung giờ nào?'
       );
     }
@@ -1300,14 +1422,15 @@ export class ChatService implements OnModuleInit {
     ) {
       return (
         '🛒 **Sản phẩm tại SmartCourt:**\n\n' +
-        '**Vợt & Cầu:**\n' +
-        '• Vợt Yonex: 450.000đ\n' +
-        '• Vợt Victor: 650.000đ\n' +
-        '• Cầu Yonex (hộp 12 quả): 180.000đ\n\n' +
-        '**Giày & Phụ kiện:**\n' +
-        '• Giày Lining: 850.000đ - 1.200.000đ\n' +
+        '**Cầu lông:**\n' +
+        '• Cầu RSL Classic: 120.000đ\n' +
+        '• Cầu Yonex AS30: 180.000đ\n' +
+        '• Cầu Victor Gold: 150.000đ\n\n' +
+        '**Vợt & Phụ kiện:**\n' +
+        '• Vợt Yonex Astrox: 1.500.000đ\n' +
+        '• Giày Kawasaki: 450.000đ\n' +
         '• Quấn cán vợt: 25.000đ\n\n' +
-        '💡 *Giá tham khảo. Đăng nhập để xem chi tiết.*'
+        '💡 *Giá từ database. Đăng nhập để xem chi tiết.*'
       );
     }
 

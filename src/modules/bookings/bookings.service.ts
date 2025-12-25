@@ -453,7 +453,8 @@ export class BookingsService {
     startTime: Date,
     endTime: Date,
   ): Promise<number> {
-    const totalMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+    const totalMinutes =
+      (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
     if (totalMinutes <= 0) {
       throw new BadRequestException('Invalid time range');
@@ -472,7 +473,10 @@ export class BookingsService {
     const peakPricePerHour = Number(court.peakPricePerHour);
 
     // Calculate time-based pricing
-    const { standardMinutes, peakMinutes } = this.splitBookingByTimeOfDay(startTime, endTime);
+    const { standardMinutes, peakMinutes } = this.splitBookingByTimeOfDay(
+      startTime,
+      endTime,
+    );
 
     // Formula: (StandardHours * standardPrice) + (PeakHours * peakPrice)
     const standardCost = (standardMinutes / 60) * standardPricePerHour;
@@ -480,9 +484,9 @@ export class BookingsService {
 
     this.logger.log(
       `💰 Price calculation for court ${courtId}: ` +
-      `Standard: ${standardMinutes}min @ ${standardPricePerHour}/h = ${standardCost}đ, ` +
-      `Peak: ${peakMinutes}min @ ${peakPricePerHour}/h = ${peakCost}đ, ` +
-      `Total: ${standardCost + peakCost}đ`
+        `Standard: ${standardMinutes}min @ ${standardPricePerHour}/h = ${standardCost}đ, ` +
+        `Peak: ${peakMinutes}min @ ${peakPricePerHour}/h = ${peakCost}đ, ` +
+        `Total: ${standardCost + peakCost}đ`,
     );
 
     return Math.round(standardCost + peakCost);
@@ -522,7 +526,8 @@ export class BookingsService {
         periodEnd = peakStart < bookingEnd ? peakStart : bookingEnd;
 
         // Add to standard minutes
-        const minutesInPeriod = (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
+        const minutesInPeriod =
+          (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
         standardMinutes += minutesInPeriod;
       } else {
         // Currently in peak time (17:00+) - period ends at midnight or booking end
@@ -533,7 +538,8 @@ export class BookingsService {
         periodEnd = midnight < bookingEnd ? midnight : bookingEnd;
 
         // Add to peak minutes
-        const minutesInPeriod = (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
+        const minutesInPeriod =
+          (periodEnd.getTime() - currentTime.getTime()) / (1000 * 60);
         peakMinutes += minutesInPeriod;
       }
 
@@ -541,7 +547,11 @@ export class BookingsService {
       currentTime = periodEnd;
 
       // Handle day transition - reset to morning standard time
-      if (currentTime.getHours() === 0 && currentTime.getMinutes() === 0 && currentTime < bookingEnd) {
+      if (
+        currentTime.getHours() === 0 &&
+        currentTime.getMinutes() === 0 &&
+        currentTime < bookingEnd
+      ) {
         // New day starts in standard time
         continue;
       }
