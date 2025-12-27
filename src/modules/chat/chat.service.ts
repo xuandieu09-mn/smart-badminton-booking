@@ -9,6 +9,7 @@ import {
   Part,
   FunctionCall,
 } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductsService } from '../pos/products.service';
 import { BookingsService } from '../bookings/bookings.service';
@@ -323,6 +324,26 @@ const AI_TOOLS = [
   },
 ];
 
+/**
+ * Convert Gemini function declarations to Groq tools format
+ */
+function convertToGroqTools() {
+  const tools = [];
+  
+  for (const func of [GET_POS_PRODUCTS, CREATE_BOOKING, GET_COURT_AVAILABILITY, GET_USER_BOOKINGS]) {
+    tools.push({
+      type: 'function',
+      function: {
+        name: func.name,
+        description: func.description,
+        parameters: func.parameters,
+      },
+    });
+  }
+  
+  return tools;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 🤖 CHAT SERVICE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -332,6 +353,8 @@ export class ChatService implements OnModuleInit {
   private readonly logger = new Logger(ChatService.name);
   private genAI: GoogleGenerativeAI | null = null;
   private model: GenerativeModel | null = null;
+  private groqClient: Groq | null = null;
+  private aiProvider: 'gemini' | 'groq' = 'groq';
   private isInitialized = false;
 
   constructor(
@@ -341,7 +364,63 @@ export class ChatService implements OnModuleInit {
     private readonly bookingsService: BookingsService,
   ) {}
 
+  /**
+   * Get Groq tools format
+   */
+  private getGroqTools() {
+    return convertToGroqTools();
+  }
+
   async onModuleInit() {
+    // Get AI provider from config
+    this.aiProvider = this.configService.get<string>('AI_PROVIDER') as 'gemini' | 'groq' || 'groq';
+    
+    if (this.aiProvider === 'groq') {
+      await this.initGroq();
+    } else {
+      await this.initGemini();
+    }
+  }
+
+  /**
+   * Initialize Groq AI
+   */
+  private async initGroq() {
+    const apiKey = this.configService.get<string>('GROQ_API_KEY');
+
+    if (!apiKey || apiKey.trim() === '' || apiKey === 'your_groq_api_key_here') {
+      this.logger.warn('⚠️ GROQ_API_KEY not configured. AI disabled.');
+      this.logger.warn('👉 Get your free API key from: https://console.groq.com');
+      return;
+    }
+
+    try {
+      this.logger.log('🚀 Initializing SmartCourt AI with Groq...');
+      
+      this.groqClient = new Groq({ apiKey });
+      
+      // Test connection
+      const testResponse = await this.groqClient.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 10,
+      });
+
+      if (testResponse.choices[0]?.message) {
+        this.isInitialized = true;
+        this.logger.log('✅ SmartCourt AI initialized with Groq (llama-3.3-70b-versatile)');
+        this.logger.log('🛠️ Tools: 4 functions (POS, Booking, Availability, User Bookings)');
+      }
+    } catch (error) {
+      this.logger.error(`❌ Groq init failed: ${error.message}`);
+      this.isInitialized = false;
+    }
+  }
+
+  /**
+   * Initialize Gemini AI (legacy)
+   */
+  private async initGemini() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
 
     if (!apiKey || apiKey.trim() === '') {
@@ -946,19 +1025,132 @@ export class ChatService implements OnModuleInit {
     this.logger.log(`💬 User ${userId || 'anonymous'}: "${message}" (history: ${history?.length || 0} messages)`);
 
     // Fallback if AI not ready
-    if (!this.isInitialized || !this.model) {
+    if (!this.isInitialized) {
       this.logger.warn('⚠️ AI not available, using fallback');
       return this.getFallbackResponse(message);
     }
 
-    // ✨ Add current date/time context to help AI understand "hôm nay", "tối nay"
+    // ✨ Add current date/time context
     const now = new Date();
-    const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
-    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+    const currentDate = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     const dateContext = `[CONTEXT: Hôm nay là ${currentDate}, hiện tại là ${currentTime}]`;
     const messageWithContext = `${dateContext}\n\n${message}`;
     
     this.logger.log(`📅 Current date context: ${currentDate} ${currentTime}`);
+
+    // Route to appropriate AI provider
+    if (this.aiProvider === 'groq') {
+      return this.generateResponseWithGroq(messageWithContext, userId, history);
+    } else {
+      return this.generateResponseWithGemini(messageWithContext, userId, history);
+    }
+  }
+
+  /**
+   * Generate response using Groq
+   */
+  private async generateResponseWithGroq(
+    message: string,
+    userId?: number | null,
+    history?: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
+  ): Promise<string> {
+    if (!this.groqClient) {
+      return this.getFallbackResponse(message);
+    }
+
+    try {
+      // Convert history to Groq format
+      const messages: any[] = [
+        { role: 'system', content: SYSTEM_INSTRUCTION }
+      ];
+
+      // Add history if provided
+      if (history && history.length > 0) {
+        for (const msg of history) {
+          messages.push({
+            role: msg.role === 'model' ? 'assistant' : 'user',
+            content: msg.parts[0]?.text || '',
+          });
+        }
+      }
+
+      // Add current message
+      messages.push({ role: 'user', content: message });
+
+      // Call Groq with function calling
+      const response = await this.groqClient.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        tools: this.getGroqTools(),
+        tool_choice: 'auto',
+        max_tokens: 1024,
+        temperature: 0.7,
+      });
+
+      const choice = response.choices[0];
+      
+      // Check if function calls are needed
+      if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+        // Execute function calls
+        const toolResults: any[] = [];
+        
+        for (const toolCall of choice.message.tool_calls) {
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+          
+          this.logger.log(`🔧 Executing function: ${functionName}`);
+          this.logger.log(`📦 Args: ${JSON.stringify(functionArgs)}`);
+          
+          const result = await this.executeFunction(
+            { name: functionName, args: functionArgs },
+            userId,
+          );
+          
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            name: functionName,
+            content: result,
+          });
+        }
+
+        // Send function results back to AI
+        messages.push(choice.message);
+        messages.push(...toolResults);
+
+        const finalResponse = await this.groqClient.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages,
+          max_tokens: 1024,
+          temperature: 0.7,
+        });
+
+        this.logger.log('🤖 AI Response with function results');
+        return finalResponse.choices[0].message.content || this.getFallbackResponse(message);
+      }
+
+      // No function calls, return text directly
+      this.logger.log('🤖 AI Response (no function calls)');
+      return choice.message.content || this.getFallbackResponse(message);
+      
+    } catch (error) {
+      this.logger.error(`❌ Groq error: ${error.message}`);
+      return this.getFallbackResponse(message);
+    }
+  }
+
+  /**
+   * Generate response using Gemini (legacy)
+   */
+  private async generateResponseWithGemini(
+    message: string,
+    userId?: number | null,
+    history?: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
+  ): Promise<string> {
+    if (!this.model) {
+      return this.getFallbackResponse(message);
+    }
 
     // 🔄 Retry logic với exponential backoff
     const maxRetries = 2;
@@ -977,8 +1169,8 @@ export class ChatService implements OnModuleInit {
           history: history || [],
         });
 
-        // Send message with date context
-        let result = await chat.sendMessage(messageWithContext);
+        // Send message with date context (message param already has context)
+        let result = await chat.sendMessage(message);
         let response = result.response;
 
         // 🔄 FUNCTION CALLING LOOP
