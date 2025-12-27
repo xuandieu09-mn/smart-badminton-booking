@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ChatService } from './chat.service';
 import { ChatMessageDto } from './dto/chat.dto';
+import { JwtService } from '@nestjs/jwt';
 
 /**
  * 🔐 Interface for authenticated request user
@@ -14,7 +15,10 @@ interface RequestUser {
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   /**
    * 💬 POST /chat - Send message to AI
@@ -27,18 +31,42 @@ export class ChatController {
     @Body() body: ChatMessageDto,
     @Req() req: Request,
   ): Promise<{ reply: string }> {
-    // Extract userId from request user
-    // Không cần userId nếu chưa đăng nhập
+    // Extract userId from request user OR from JWT token (optional auth)
     let userId: number | null = null;
+    
+    // Try to get userId from req.user (if AuthGuard was used)
     if (req.user) {
       const user = req.user as RequestUser;
       userId = this.extractUserId(user);
+      console.log('✅ UserId from req.user:', userId);
+    } 
+    // Otherwise, try to parse JWT token manually (optional authentication)
+    else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.substring(7);
+          const payload = this.jwtService.verify(token);
+          userId = payload.sub || payload.userId || null;
+          console.log('✅ UserId from JWT token:', userId);
+          console.log('📦 JWT Payload:', payload);
+        } catch (error) {
+          // Invalid token - continue without userId (anonymous chat)
+          console.log('⚠️ Invalid JWT token, continuing as anonymous');
+          console.log('❌ Error:', error.message);
+        }
+      } else {
+        console.log('⚠️ No Authorization header found');
+      }
     }
 
-    // Generate AI response (history is managed internally by ChatService)
+    console.log('🔑 Final userId being sent to ChatService:', userId);
+
+    // Generate AI response với history từ frontend
     const reply = await this.chatService.generateResponse(
       body.message,
       userId,
+      body.history || [],
     );
 
     return { reply };

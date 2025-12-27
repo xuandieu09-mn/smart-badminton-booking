@@ -941,14 +941,24 @@ export class ChatService implements OnModuleInit {
   async generateResponse(
     message: string,
     userId?: number | null,
+    history?: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
   ): Promise<string> {
-    this.logger.log(`💬 User ${userId || 'anonymous'}: "${message}"`);
+    this.logger.log(`💬 User ${userId || 'anonymous'}: "${message}" (history: ${history?.length || 0} messages)`);
 
     // Fallback if AI not ready
     if (!this.isInitialized || !this.model) {
       this.logger.warn('⚠️ AI not available, using fallback');
       return this.getFallbackResponse(message);
     }
+
+    // ✨ Add current date/time context to help AI understand "hôm nay", "tối nay"
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+    const dateContext = `[CONTEXT: Hôm nay là ${currentDate}, hiện tại là ${currentTime}]`;
+    const messageWithContext = `${dateContext}\n\n${message}`;
+    
+    this.logger.log(`📅 Current date context: ${currentDate} ${currentTime}`);
 
     // 🔄 Retry logic với exponential backoff
     const maxRetries = 2;
@@ -962,11 +972,13 @@ export class ChatService implements OnModuleInit {
           await new Promise((resolve) => setTimeout(resolve, 1000 * retry));
         }
 
-        // Start chat session
-        const chat: ChatSession = this.model.startChat({ history: [] });
+        // Start chat session với history từ frontend
+        const chat: ChatSession = this.model.startChat({ 
+          history: history || [],
+        });
 
-        // Send message
-        let result = await chat.sendMessage(message);
+        // Send message with date context
+        let result = await chat.sendMessage(messageWithContext);
         let response = result.response;
 
         // 🔄 FUNCTION CALLING LOOP

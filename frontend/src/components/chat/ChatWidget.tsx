@@ -40,7 +40,9 @@ const ChatWidget: React.FC = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { token } = useAuthStore();
+  const { accessToken } = useAuthStore();
+  // ✅ Fallback: Get token from localStorage if not in store (after old persist format)
+  const token = accessToken || localStorage.getItem('access_token');
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
@@ -77,6 +79,18 @@ const ChatWidget: React.FC = () => {
       // Log for debugging
       console.log('📤 Sending chat request:', userMessage.content);
       console.log('🔑 Token:', token ? 'Present' : 'Missing');
+      console.log('🔍 Token value:', token); // Debug: see actual token
+
+      // 🆕 Build history from previous messages (exclude welcome message)
+      // Format: [{ role: 'user' | 'model', parts: [{ text: string }] }]
+      const history = messages
+        .filter(m => m.id !== '1') // Exclude welcome message
+        .map(m => ({
+          role: m.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: m.content }],
+        }));
+      
+      console.log('📜 History length:', history.length);
 
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
@@ -84,7 +98,10 @@ const ChatWidget: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({ 
+          message: userMessage.content,
+          history: history,
+        }),
       });
 
       console.log('📥 Response status:', response.status);
