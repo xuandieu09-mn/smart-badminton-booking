@@ -18,6 +18,8 @@ export const CheckInPage: React.FC = () => {
     success: boolean;
     message: string;
     booking?: any;
+    isGroup?: boolean;
+    groupBookings?: any[];
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -54,19 +56,30 @@ export const CheckInPage: React.FC = () => {
         },
       );
 
-      setCheckInResult({
-        success: true,
-        message: response.data.message || 'Check-in thành công!',
-        booking: response.data.booking,
-      });
+      // Check if it's a group response
+      if (response.data.isGroup) {
+        setCheckInResult({
+          success: true,
+          message: `Lịch cố định - ${response.data.totalSessions} buổi`,
+          isGroup: true,
+          groupBookings: response.data.bookings,
+          booking: response.data,
+        });
+      } else {
+        setCheckInResult({
+          success: true,
+          message: response.data.message || 'Check-in thành công!',
+          booking: response.data.booking,
+        });
 
-      // Clear manual input
-      setManualCode('');
+        // Clear manual input
+        setManualCode('');
 
-      // Auto-hide success message after 5 seconds
-      setTimeout(() => {
-        setCheckInResult(null);
-      }, 5000);
+        // Auto-hide success message after 5 seconds
+        setTimeout(() => {
+          setCheckInResult(null);
+        }, 5000);
+      }
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || error.message || 'Lỗi không xác định';
@@ -172,7 +185,45 @@ export const CheckInPage: React.FC = () => {
                           : 'Check-in thất bại'}
                       </h3>
                       <p className="text-sm">{checkInResult.message}</p>
-                      {checkInResult.booking && (
+                      
+                      {/* Group Bookings Selection */}
+                      {checkInResult.isGroup && checkInResult.groupBookings && (
+                        <div className="mt-4">
+                          <p className="text-sm font-medium mb-3">Chọn buổi cần check-in:</p>
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {checkInResult.groupBookings.map((b: any) => (
+                              <button
+                                key={b.id}
+                                onClick={() => handleCheckIn(b.bookingCode)}
+                                disabled={!b.canCheckIn}
+                                className={`w-full text-left p-3 rounded border ${
+                                  b.canCheckIn
+                                    ? 'bg-white hover:bg-blue-50 border-blue-300 cursor-pointer'
+                                    : 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
+                                }`}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{b.date} - {b.dayName}</div>
+                                    <div className="text-sm text-gray-600">{b.time}</div>
+                                    <div className="text-xs text-gray-500 mt-1">{b.bookingCode}</div>
+                                  </div>
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    b.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                                    b.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {b.status}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Individual Booking Info */}
+                      {checkInResult.booking && !checkInResult.isGroup && (
                         <div className="mt-3 text-sm bg-white rounded p-3 border">
                           <div className="grid grid-cols-2 gap-2">
                             <div>

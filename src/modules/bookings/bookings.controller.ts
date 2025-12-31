@@ -10,8 +10,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
+import { BookingsAdminService } from './bookings-admin.service';
 import { QRCodeService } from './qrcode.service';
 import { CreateBookingDto, AdminUpdateBookingDto } from './dto';
+import { CreateFixedBookingDto } from './dto/create-fixed-booking.dto';
+import { CancelBookingGroupDto } from './dto/cancel-booking-group.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -26,6 +29,7 @@ type JwtUser = UserInterface.JwtUser;
 export class BookingsController {
   constructor(
     private bookingsService: BookingsService,
+    private bookingsAdminService: BookingsAdminService,
     private qrcodeService: QRCodeService,
   ) {}
 
@@ -59,6 +63,30 @@ export class BookingsController {
       total: results.length,
       bookings: results,
     };
+  }
+
+  /**   * 🔍 Check availability for fixed schedule booking
+   * Returns summary and conflicts if any
+   */
+  @Post('fixed/check')
+  async checkFixedScheduleAvailability(
+    @Body() dto: CreateFixedBookingDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.checkFixedScheduleAvailability(dto, user.id);
+  }
+
+  /**   * 📅 Create fixed schedule booking (recurring)
+   * Automatically applies discount:
+   * - >4 sessions: 5% off
+   * - >8 sessions: 10% off
+   */
+  @Post('fixed')
+  async createFixedScheduleBooking(
+    @Body() dto: CreateFixedBookingDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsService.createFixedScheduleBooking(dto, user.id);
   }
 
   /**
@@ -225,8 +253,15 @@ export class BookingsController {
     }
 
     // Check in the booking
-    const booking = await this.bookingsService.checkInBooking(bookingCode);
+    const result = await this.bookingsService.checkInBooking(bookingCode);
 
+    // If it's a group response, return group info
+    if ('isGroup' in result && result.isGroup) {
+      return result; // Return group data directly for selection
+    }
+
+    // Individual booking response
+    const booking = result as any;
     return {
       message: 'Check-in successful',
       booking: {
@@ -309,5 +344,62 @@ export class BookingsController {
   @Roles(Role.STAFF, Role.ADMIN)
   async getBookingPaymentStatus(@Param('id', ParseIntPipe) id: number) {
     return this.bookingsService.getBookingPaymentStatus(id);
+  }
+
+  // ==================== BOOKING GROUPS (Fixed Schedule) ====================
+
+  /**
+   * 📋 Get booking group details (Staff/Admin)
+   * View all bookings in a fixed schedule group
+   */
+  @Get('groups/:id')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getBookingGroupDetails(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingsAdminService.getBookingGroupDetails(id);
+  }
+
+  /**
+   * 🎫 Generate QR code for booking group (Staff/Admin)
+   */
+  @Post('groups/:id/generate-qr')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async generateGroupQRCode(@Param('id', ParseIntPipe) id: number) {
+    // Verify group exists
+    const group = await this.bookingsAdminService.getBookingGroupDetails(id);
+
+    // Generate QR code for the group
+    const qrCodeDataURL = await this.qrcodeService.generateGroupQR(id);
+
+    return {
+      message: 'Group QR code generated successfully',
+      groupId: group.id,
+      groupCode: `GROUP-${id}`,
+      totalSessions: group.totalSessions,
+      qrCode: qrCodeDataURL,
+    };
+  }
+
+  /**
+   * 📊 Get all booking groups (Staff/Admin)
+   * List all fixed schedule bookings with filters
+   */
+  @Get('groups')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async getAllBookingGroups(@Query() filters: any) {
+    return this.bookingsAdminService.getAllBookingGroups(filters);
+  }
+
+  /**
+   * ❌ Cancel entire booking group (Staff/Admin)
+   * Cancel all bookings in a fixed schedule group
+   */
+  @Post('groups/:id/cancel')
+  @Roles(Role.STAFF, Role.ADMIN)
+  async cancelBookingGroup(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelBookingGroupDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.bookingsAdminService.cancelBookingGroup(id, user.id, dto);
   }
 }

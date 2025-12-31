@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { BookingsService } from './bookings.service';
+import { BookingsAdminService } from './bookings-admin.service';
 import { BookingsController } from './bookings.controller';
 import { BookingTimeoutProcessor } from './processors/booking-timeout.processor';
 import { QRCodeService } from './qrcode.service';
@@ -14,7 +15,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
     }),
     NotificationsModule,
   ],
-  providers: [BookingsService, BookingTimeoutProcessor, QRCodeService],
+  providers: [
+    BookingsService,
+    BookingsAdminService,
+    BookingTimeoutProcessor,
+    QRCodeService,
+  ],
   controllers: [BookingsController],
   exports: [BookingsService], // Export for ChatModule (Agentic AI)
 })

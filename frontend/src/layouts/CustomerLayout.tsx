@@ -21,6 +21,7 @@ const CustomerLayout: React.FC = () => {
 
   const navItems = [
     { label: 'Đặt sân', path: '/calendar', icon: '📅' },
+    { label: 'Đặt lịch cố định', path: '/fixed-booking', icon: '📆' },
     { label: 'Lịch của tôi', path: '/my-bookings', icon: '📋' },
     { label: 'Ví tiền', path: '/dashboard', icon: '💰' },
   ];

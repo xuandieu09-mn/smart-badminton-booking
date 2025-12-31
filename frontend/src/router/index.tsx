@@ -7,6 +7,7 @@ import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { CalendarPage } from '../features/calendar/pages/CalendarPage';
 import { BookingPage } from '../features/booking/pages/BookingPage';
 import MyBookingsPage from '../features/booking/pages/MyBookingsPage';
+import FixedBookingPage from '../pages/FixedBookingPage';
 import { CustomerDashboard } from '../features/dashboard/pages/CustomerDashboard';
 import TransactionHistory from '../features/dashboard/pages/TransactionHistory';
 import SettingsPage from '../features/settings/pages/SettingsPage';
@@ -135,6 +136,10 @@ export const router = createBrowserRouter([
       {
         path: 'bookings',
         element: <BookingPage />,
+      },
+      {
+        path: 'fixed-booking',
+        element: <FixedBookingPage />,
       },
       {
         path: 'my-bookings',

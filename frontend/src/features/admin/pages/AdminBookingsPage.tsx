@@ -8,6 +8,8 @@ import TimelineResourceGrid, {
 } from '../../calendar/components/TimelineResourceGrid';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminBookingModal from '../components/AdminBookingModal';
+import BookingGroupBadge from '@/components/admin/BookingGroupBadge';
+import BookingGroupModal from '@/components/admin/BookingGroupModal';
 import HybridDatePicker from '@/components/common/HybridDatePicker';
 import '../../calendar/components/TimelineResourceGrid.css';
 
@@ -29,6 +31,12 @@ interface Booking {
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
+  bookingGroupId?: number | null;
+  bookingGroup?: {
+    id: number;
+    totalSessions: number;
+    status: string;
+  };
 }
 
 // ==================== COMPONENT ====================
@@ -37,6 +45,7 @@ export const AdminBookingsPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -262,13 +271,25 @@ export const AdminBookingsPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-sm">
-                            <p className="font-medium">
-                              {bk.user?.name || bk.guestName || 'N/A'}
-                            </p>
-                            <p className="text-gray-500 text-xs">
-                              {bk.user?.phone || bk.guestPhone || ''}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm">
+                              <p className="font-medium">
+                                {bk.user?.name || bk.guestName || 'N/A'}
+                              </p>
+                              <p className="text-gray-500 text-xs">
+                                {bk.user?.phone || bk.guestPhone || ''}
+                              </p>
+                            </div>
+                            {bk.bookingGroupId && (
+                              <BookingGroupBadge
+                                bookingGroupId={bk.bookingGroupId}
+                                totalSessions={bk.bookingGroup?.totalSessions}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedGroupId(bk.bookingGroupId);
+                                }}
+                              />
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -346,6 +367,18 @@ export const AdminBookingsPage: React.FC = () => {
           isOpen={isModalOpen}
           onClose={handleModalClose}
           onSuccess={handleModalSuccess}
+        />
+      )}
+
+      {/* Booking Group Modal */}
+      {selectedGroupId && (
+        <BookingGroupModal
+          groupId={selectedGroupId}
+          visible={!!selectedGroupId}
+          onClose={() => {
+            setSelectedGroupId(null);
+            queryClient.invalidateQueries({ queryKey: ['all-court-bookings'] });
+          }}
         />
       )}
     </div>

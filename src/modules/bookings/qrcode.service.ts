@@ -24,6 +24,28 @@ export class QRCodeService {
   }
 
   /**
+   * Generate QR code for booking group (fixed schedule)
+   * QR code contains group ID prefixed with "GROUP-"
+   */
+  async generateGroupQR(groupId: number): Promise<string> {
+    try {
+      // Use GROUP- prefix to distinguish from individual booking codes
+      const groupCode = `GROUP-${groupId}`;
+      
+      const qrCodeDataURL = await QRCode.toDataURL(groupCode, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        width: 300,
+        margin: 2,
+      });
+
+      return qrCodeDataURL;
+    } catch (error) {
+      throw new Error(`Failed to generate group QR code: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate QR code as buffer (for saving to file if needed)
    */
   async generateBookingQRBuffer(bookingCode: string): Promise<Buffer> {

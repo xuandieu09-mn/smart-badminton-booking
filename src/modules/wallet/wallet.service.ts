@@ -2,12 +2,19 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService,
+  ) {}
 
   /**
    * 💼 Get wallet balance
@@ -69,6 +76,14 @@ export class WalletService {
           balanceAfter,
           description: `Deposit by admin ${adminId}`,
         },
+      });
+
+      // Send notification to customer
+      await this.notificationsService.notifyWalletTransaction(userId, {
+        type: 'DEPOSIT',
+        amount,
+        balanceAfter,
+        description: `Nạp tiền vào ví`,
       });
 
       return {
@@ -135,6 +150,14 @@ export class WalletService {
           balanceAfter,
           description: 'Self top-up (simulated payment)',
         },
+      });
+
+      // Send notification to customer
+      await this.notificationsService.notifyWalletTransaction(userId, {
+        type: 'DEPOSIT',
+        amount,
+        balanceAfter,
+        description: `Nạp tiền tự động`,
       });
 
       return {

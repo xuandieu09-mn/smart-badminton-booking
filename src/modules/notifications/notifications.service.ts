@@ -1288,6 +1288,58 @@ export class NotificationsService {
 
   // ==================== HELPERS ====================
 
+  /**
+   * 💰 Notify customer about wallet transaction
+   */
+  async notifyWalletTransaction(
+    userId: number,
+    transaction: {
+      type: string;
+      amount: number;
+      balanceAfter: number;
+      description: string;
+    },
+  ): Promise<void> {
+    const amount = this.formatCurrency(Math.abs(transaction.amount));
+    const balance = this.formatCurrency(transaction.balanceAfter);
+
+    let title = '';
+    let message = '';
+    let type: NotificationType = NotificationType.INFO;
+
+    if (transaction.type === 'DEPOSIT') {
+      title = '💰 Nạp tiền thành công';
+      message = `+${amount} đã được nạp vào ví. Số dư: ${balance}`;
+      type = NotificationType.SUCCESS;
+    } else if (transaction.type === 'PAYMENT') {
+      title = '💸 Thanh toán thành công';
+      message = `-${amount} đã được trừ từ ví. Số dư còn lại: ${balance}`;
+      type = NotificationType.INFO;
+    } else if (transaction.type === 'REFUND') {
+      title = '💸 Hoàn tiền thành công';
+      message = `+${amount} đã được hoàn vào ví. Số dư: ${balance}`;
+      type = NotificationType.SUCCESS;
+    }
+
+    await this.createAndEmitNotification({
+      userId,
+      title,
+      message,
+      type,
+      metadata: {
+        event: 'WALLET_TRANSACTION',
+        transactionType: transaction.type,
+        amount: transaction.amount,
+        balanceAfter: transaction.balanceAfter,
+        description: transaction.description,
+      },
+    });
+
+    this.logger.log(
+      `💰 Wallet notification sent to user #${userId}: ${transaction.type} ${amount}`,
+    );
+  }
+
   private formatCurrency(amount: number): string {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',

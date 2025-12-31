@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác nhận đặt lịch cố định</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .summary-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .summary-box h2 {
+            margin-top: 0;
+            color: #667eea;
+            font-size: 20px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .info-item {
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+        }
+        .info-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value {
+            color: #333;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .pricing-table {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .pricing-row:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 18px;
+            color: #667eea;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid #667eea;
+        }
+        .discount-badge {
+            background-color: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .schedule-table th {
+            background-color: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .schedule-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .schedule-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .schedule-table tr:hover {
+            background-color: #f0f0f0;
+        }
+        .booking-code {
+            font-family: 'Courier New', monospace;
+            background-color: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #667eea;
+        }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .status-confirmed {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .footer {
+            background-color: #f9f9f9;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        @media only screen and (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .schedule-table {
+                font-size: 12px;
+            }
+            .schedule-table th,
+            .schedule-table td {
+                padding: 8px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎉 Đặt lịch cố định thành công!</h1>
+            <p>Cảm ơn bạn đã đăng ký lịch chơi cố định tại SmartCourt</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Customer Info -->
+            <p>Kính chào <strong>{{customerName}}</strong>,</p>
+            <p>Chúng tôi xác nhận đã nhận được đặt lịch cố định của bạn. Dưới đây là chi tiết:</p>
+
+            <!-- Summary Box -->
+            <div class="summary-box">
+                <h2>📋 Thông tin đặt lịch</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Sân chơi</div>
+                        <div class="info-value">{{courtName}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Mã nhóm</div>
+                        <div class="info-value">#{{groupId}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Lịch chơi</div>
+                        <div class="info-value">{{schedule}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Thời gian</div>
+                        <div class="info-value">{{timeRange}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Khoảng thời gian</div>
+                        <div class="info-value">{{period}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Tổng số buổi</div>
+                        <div class="info-value">{{totalSessions}} buổi</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pricing -->
+            <div class="pricing-table">
+                <div class="pricing-row">
+                    <span>Tổng tiền gốc ({{totalSessions}} buổi):</span>
+                    <span>{{originalPrice}}</span>
+                </div>
+                {{#if hasDiscount}}
+                <div class="pricing-row" style="color: #10b981;">
+                    <span>Giảm giá <span class="discount-badge">{{discountRate}}% OFF</span>:</span>
+                    <span>-{{discountAmount}}</span>
+                </div>
+                {{/if}}
+                <div class="pricing-row">
+                    <span>💰 Thành tiền:</span>
+                    <span>{{finalPrice}}</span>
+                </div>
+            </div>
+
+            {{#if groupQRCode}}
+            <!-- QR Code Section -->
+            <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f0f4ff; border-radius: 8px;">
+                <h3 style="color: #667eea; margin-top: 0;">🎫 Mã QR Check-in</h3>
+                <p style="color: #666; margin-bottom: 15px;">Sử dụng mã QR này cho TẤT CẢ {{totalSessions}} buổi chơi</p>
+                <img src="{{groupQRCode}}" alt="QR Code" style="max-width: 250px; height: auto; border: 3px solid #667eea; border-radius: 8px; padding: 10px; background-color: white;">
+                <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                    Khi đến sân, vui lòng xuất trình mã QR này để staff check-in<br>
+                    <strong>1 mã QR dùng cho cả tháng - Rất tiện lợi!</strong>
+                </p>
+            </div>
+            {{/if}}
+
+            <!-- Schedule Table -->
+            <h3 style="color: #667eea; margin-top: 30px;">📅 Danh sách các buổi đã đặt</h3>
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ngày chơi</th>
+                        <th>Thứ</th>
+                        <th>Giờ</th>
+                        <th>Mã đặt chỗ</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each bookings}}
+                    <tr>
+                        <td>{{increment @index}}</td>
+                        <td>{{this.date}}</td>
+                        <td>{{this.dayName}}</td>
+                        <td>{{this.time}}</td>
+                        <td><span class="booking-code">{{this.bookingCode}}</span></td>
+                        <td><span class="status-badge status-confirmed">Đã xác nhận</span></td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            <!-- Important Notes -->
+            <div class="warning-box">
+                <strong>⚠️ Lưu ý quan trọng:</strong>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Vui lòng đến sân <strong>trước 10 phút</strong> để làm thủ tục check-in</li>
+                    <li>Mang theo <strong>mã đặt chỗ</strong> hoặc email này khi đến sân</li>
+                    <li>Nếu muốn hủy lịch, vui lòng thông báo <strong>ít nhất 24 giờ trước</strong></li>
+                    <li>Liên hệ hotline <strong>1900-xxxx</strong> nếu cần hỗ trợ</li>
+                </ul>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{dashboardUrl}}" class="cta-button">Xem lịch đặt của tôi</a>
+            </div>
+
+            <!-- Footer Message -->
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của SmartCourt. 
+                Chúng tôi cam kết mang đến trải nghiệm chơi cầu lông tốt nhất! 🏸
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>SmartCourt Badminton Booking System</strong></p>
+            <p>
+                Địa chỉ: 123 Đường ABC, Quận XYZ, TP.HCM<br>
+                Email: <a href="mailto:support@smartcourt.vn">support@smartcourt.vn</a> | 
+                Hotline: 1900-xxxx
+            </p>
+            <p style="font-size: 12px; color: #999; margin-top: 20px;">
+                Email này được gửi tự động. Vui lòng không trả lời email này.<br>
+                © 2025 SmartCourt. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

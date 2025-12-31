@@ -7,6 +7,7 @@ import {
   AdminUpdateBookingDto,
   AdminUpdateResult,
 } from './dto';
+import { CreateFixedBookingDto } from './dto/create-fixed-booking.dto';
 import {
   BookingStatus,
   BookingType,
@@ -25,7 +26,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../notifications/email.service';
 import { EventsGateway } from '../../common/websocket/events.gateway';
+import { QRCodeService } from './qrcode.service';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class BookingsService {
@@ -36,7 +40,9 @@ export class BookingsService {
     @InjectQueue(QUEUE_NAMES.BOOKING_TIMEOUT)
     private bookingQueue: Queue<ExpireBookingJobData>,
     private notificationsService: NotificationsService,
+    private emailService: EmailService,
     private eventsGateway: EventsGateway,
+    private qrcodeService: QRCodeService,
   ) {}
 
   /**
@@ -792,10 +798,18 @@ export class BookingsService {
   }
 
   /**
-   * ✅ Check-in booking using booking code (Staff only)
-   * Update status from CONFIRMED to CHECKED_IN
+   * ✅ Check-in booking using booking code OR group code (Staff only)
+   * - If bookingCode: Direct check-in (existing flow)
+   * - If GROUP-{id}: Return list of bookings in group for selection
    */
   async checkInBooking(bookingCode: string) {
+    // Check if it's a group QR code
+    if (bookingCode.startsWith('GROUP-')) {
+      const groupId = parseInt(bookingCode.replace('GROUP-', ''));
+      return this.getGroupBookingsForCheckIn(groupId);
+    }
+
+    // Original flow: Individual booking check-in
     // Find booking by code
     const booking = await this.prisma.booking.findUnique({
       where: { bookingCode },
@@ -840,6 +854,13 @@ export class BookingsService {
       throw new BadRequestException('Booking time has expired.');
     }
 
+    // Check if customer is late (more than 15 minutes after start time)
+    const lateThreshold = new Date(startTime.getTime() + 15 * 60 * 1000);
+    const isLate = now > lateThreshold;
+    const minutesLate = isLate
+      ? Math.floor((now.getTime() - startTime.getTime()) / (60 * 1000))
+      : 0;
+
     // Update status to CHECKED_IN and set check-in timestamp
     const updatedBooking = await this.prisma.booking.update({
       where: { id: booking.id },
@@ -864,6 +885,14 @@ export class BookingsService {
       await this.notificationsService.notifyCheckInSuccess(updatedBooking);
       // 🏃 Also notify admin/staff that customer has arrived
       await this.notificationsService.notifyCustomerArrived(updatedBooking);
+
+      // 🚨 If customer is late, send late check-in notification
+      if (isLate) {
+        await this.notificationsService.notifyLateCheckIn(
+          updatedBooking,
+          minutesLate,
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send check-in notification: ${error.message}`,
@@ -871,6 +900,58 @@ export class BookingsService {
     }
 
     return updatedBooking;
+  }
+
+  /**
+   * 📋 Get bookings in a group for check-in selection
+   * Used when scanning group QR code
+   */
+  private async getGroupBookingsForCheckIn(groupId: number) {
+    const group = await this.prisma.bookingGroup.findUnique({
+      where: { id: groupId },
+      include: {
+        court: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        bookings: {
+          orderBy: {
+            startTime: 'asc',
+          },
+          include: {
+            court: true,
+          },
+        },
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Booking group not found: ${groupId}`);
+    }
+
+    // Return group info with bookings for selection
+    return {
+      isGroup: true,
+      groupId: group.id,
+      customer: group.user,
+      court: group.court,
+      totalSessions: group.totalSessions,
+      bookings: group.bookings.map((b) => ({
+        id: b.id,
+        bookingCode: b.bookingCode,
+        date: dayjs(b.startTime).format('DD/MM/YYYY'),
+        dayName: dayjs(b.startTime).format('dddd'),
+        time: `${dayjs(b.startTime).format('HH:mm')} - ${dayjs(b.endTime).format('HH:mm')}`,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        status: b.status,
+        canCheckIn: b.status === BookingStatus.CONFIRMED,
+      })),
+    };
   }
 
   /**
@@ -1777,5 +1858,624 @@ export class BookingsService {
         ? { userId: booking.userId }
         : { guestName: booking.guestName, guestPhone: booking.guestPhone },
     };
+  }
+
+  /**
+   * � Check availability for fixed schedule booking
+   * Returns summary with pricing and any conflicts
+   */
+  async checkFixedScheduleAvailability(
+    dto: CreateFixedBookingDto,
+    userId: number,
+  ) {
+    const { courtId, startDate, endDate, daysOfWeek, startTime, endTime } = dto;
+
+    // 1️⃣ Validate input
+    if (!daysOfWeek || daysOfWeek.length === 0) {
+      throw new BadRequestException('daysOfWeek must contain at least one day');
+    }
+
+    if (daysOfWeek.some((day) => day < 0 || day > 6)) {
+      throw new BadRequestException(
+        'daysOfWeek must be between 0 (Sunday) and 6 (Saturday)',
+      );
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start >= end) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+
+    if (start < new Date()) {
+      throw new BadRequestException('Cannot book in the past');
+    }
+
+    // Validate time format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+      throw new BadRequestException('Time must be in HH:MM format');
+    }
+
+    // 2️⃣ Check court exists
+    const court = await this.prisma.court.findUnique({
+      where: { id: courtId },
+    });
+
+    if (!court) {
+      throw new NotFoundException('Court not found');
+    }
+
+    if (!court.isActive) {
+      throw new BadRequestException('Court is not available');
+    }
+
+    // 3️⃣ Calculate all booking dates
+    const bookingDates = this.calculateBookingDates(start, end, daysOfWeek);
+
+    if (bookingDates.length === 0) {
+      throw new BadRequestException(
+        'No valid booking dates found in the specified range',
+      );
+    }
+
+    // 4️⃣ Check for conflicts
+    const conflicts: Array<{
+      date: string;
+      day: string;
+      bookingCode: string;
+    }> = [];
+
+    for (const bookingDate of bookingDates) {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      const bookingStart = new Date(bookingDate);
+      bookingStart.setHours(startHour, startMinute, 0, 0);
+
+      const bookingEnd = new Date(bookingDate);
+      bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+      const conflictBooking = await this.prisma.booking.findFirst({
+        where: {
+          courtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          OR: [
+            {
+              startTime: { lt: bookingEnd },
+              endTime: { gt: bookingStart },
+            },
+          ],
+        },
+        select: {
+          bookingCode: true,
+        },
+      });
+
+      if (conflictBooking) {
+        const dayNames = [
+          'Chủ nhật',
+          'Thứ 2',
+          'Thứ 3',
+          'Thứ 4',
+          'Thứ 5',
+          'Thứ 6',
+          'Thứ 7',
+        ];
+        conflicts.push({
+          date: bookingDate.toISOString().split('T')[0],
+          day: dayNames[bookingDate.getDay()],
+          bookingCode: conflictBooking.bookingCode,
+        });
+      }
+    }
+
+    // If there are conflicts, return them
+    if (conflicts.length > 0) {
+      return {
+        success: false,
+        conflicts,
+        message: `Found ${conflicts.length} conflicting date(s)`,
+      };
+    }
+
+    // 5️⃣ Calculate pricing (no conflicts)
+    let originalPrice = new Decimal(0);
+
+    for (const bookingDate of bookingDates) {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      const bookingStart = new Date(bookingDate);
+      bookingStart.setHours(startHour, startMinute, 0, 0);
+
+      const bookingEnd = new Date(bookingDate);
+      bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+      const price = await this.calculatePrice(
+        courtId,
+        bookingStart,
+        bookingEnd,
+      );
+      originalPrice = originalPrice.add(new Decimal(price));
+    }
+
+    // Calculate discount
+    const totalSessions = bookingDates.length;
+    let discountRate = 0;
+
+    if (totalSessions > 8) {
+      discountRate = 10;
+    } else if (totalSessions > 4) {
+      discountRate = 5;
+    }
+
+    const discountAmount = originalPrice
+      .mul(new Decimal(discountRate))
+      .div(100);
+    const finalPrice = originalPrice.sub(discountAmount);
+
+    // 6️⃣ Check wallet balance
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    const hasEnoughBalance = new Decimal(wallet.balance).greaterThanOrEqualTo(
+      finalPrice,
+    );
+
+    // Return success summary
+    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const schedule = daysOfWeek.map((d) => dayNames[d]).join(', ');
+
+    return {
+      success: true,
+      summary: {
+        courtName: court.name,
+        schedule: `${schedule} (${startTime} - ${endTime})`,
+        period: `${dayjs(start).format('DD/MM/YYYY')} - ${dayjs(end).format('DD/MM/YYYY')}`,
+        totalSessions,
+        originalPrice: Number(originalPrice),
+        discountRate,
+        discountAmount: Number(discountAmount),
+        finalPrice: Number(finalPrice),
+        walletBalance: Number(wallet.balance),
+        hasEnoughBalance,
+      },
+      message: 'All dates are available',
+    };
+  }
+
+  /**
+   * �📅🔁 Create Fixed Schedule Booking
+   *
+   * Creates a group of recurring bookings for a fixed schedule
+   * Example: Book Court 1 every Monday & Wednesday 18:00-20:00 for 2 months
+   *
+   * @param dto - Fixed schedule booking parameters
+   * @param userId - User creating the booking group
+   * @param userRole - Role of the user
+   *
+   * Process:
+   * 1. Validate input parameters
+   * 2. Calculate all booking dates based on daysOfWeek
+   * 3. Check availability for ALL dates (fail if ANY conflict)
+   * 4. Calculate total price for all bookings
+   * 5. Create BookingGroup + all Bookings in single transaction
+   */
+  async createFixedScheduleBooking(dto: CreateFixedBookingDto, userId: number) {
+    const { courtId, startDate, endDate, daysOfWeek, startTime, endTime } = dto;
+
+    // 1️⃣ Validate input
+    if (!daysOfWeek || daysOfWeek.length === 0) {
+      throw new BadRequestException('daysOfWeek must contain at least one day');
+    }
+
+    if (daysOfWeek.some((day) => day < 0 || day > 6)) {
+      throw new BadRequestException(
+        'daysOfWeek must be between 0 (Sunday) and 6 (Saturday)',
+      );
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start >= end) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+
+    if (start < new Date()) {
+      throw new BadRequestException('Cannot book in the past');
+    }
+
+    // Validate time format (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+      throw new BadRequestException('Time must be in HH:MM format');
+    }
+
+    // 2️⃣ Check court exists
+    const court = await this.prisma.court.findUnique({
+      where: { id: courtId },
+    });
+
+    if (!court) {
+      throw new NotFoundException('Court not found');
+    }
+
+    if (!court.isActive) {
+      throw new BadRequestException('Court is not available');
+    }
+
+    // 3️⃣ Calculate all booking dates
+    const bookingDates = this.calculateBookingDates(start, end, daysOfWeek);
+
+    if (bookingDates.length === 0) {
+      throw new BadRequestException(
+        'No valid booking dates found in the specified range',
+      );
+    }
+
+    this.logger.log(
+      `📅 Calculated ${bookingDates.length} booking dates: ${bookingDates.map((d) => d.toISOString().split('T')[0]).join(', ')}`,
+    );
+
+    // 4️⃣ Check availability for ALL dates (CRITICAL)
+    const conflicts: { date: Date; conflictBooking: any }[] = [];
+
+    for (const bookingDate of bookingDates) {
+      // Combine date with time
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      const bookingStart = new Date(bookingDate);
+      bookingStart.setHours(startHour, startMinute, 0, 0);
+
+      const bookingEnd = new Date(bookingDate);
+      bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+      // Check for conflict
+      const conflictBooking = await this.prisma.booking.findFirst({
+        where: {
+          courtId,
+          status: {
+            notIn: [BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+          },
+          OR: [
+            {
+              startTime: { lt: bookingEnd },
+              endTime: { gt: bookingStart },
+            },
+          ],
+        },
+      });
+
+      if (conflictBooking) {
+        conflicts.push({ date: bookingDate, conflictBooking });
+      }
+    }
+
+    // 🚨 If ANY date has conflict, FAIL and report
+    if (conflicts.length > 0) {
+      const conflictMessages = conflicts.map((c) => {
+        const dateStr = c.date.toISOString().split('T')[0];
+        const dayName = [
+          'Sunday',
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+        ][c.date.getDay()];
+        return `${dateStr} (${dayName}): ${c.conflictBooking.bookingCode}`;
+      });
+
+      throw new ConflictException(
+        `Cannot create fixed schedule booking. ${conflicts.length} date(s) have conflicts:\n${conflictMessages.join('\n')}`,
+      );
+    }
+
+    // 5️⃣ Calculate total price for ALL bookings
+    let originalPrice = new Decimal(0);
+    const bookingPrices: { date: Date; price: number }[] = [];
+
+    for (const bookingDate of bookingDates) {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      const bookingStart = new Date(bookingDate);
+      bookingStart.setHours(startHour, startMinute, 0, 0);
+
+      const bookingEnd = new Date(bookingDate);
+      bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+      const price = await this.calculatePrice(
+        courtId,
+        bookingStart,
+        bookingEnd,
+      );
+      originalPrice = originalPrice.add(new Decimal(price));
+      bookingPrices.push({ date: bookingDate, price });
+    }
+
+    // 💰 DISCOUNT LOGIC: Apply tiered discount based on total sessions
+    const totalSessions = bookingDates.length;
+    let discountRate = new Decimal(0);
+
+    if (totalSessions > 8) {
+      discountRate = new Decimal(0.1); // 10% discount for >8 sessions
+    } else if (totalSessions > 4) {
+      discountRate = new Decimal(0.05); // 5% discount for >4 sessions
+    }
+
+    const discountAmount = originalPrice.mul(discountRate);
+    const finalPrice = originalPrice.sub(discountAmount);
+
+    this.logger.log(
+      `💰 Pricing: ${totalSessions} sessions | Original: ${originalPrice.toNumber()} VND | Discount: ${discountRate.mul(100).toNumber()}% (-${discountAmount.toNumber()} VND) | Final: ${finalPrice.toNumber()} VND`,
+    );
+
+    // 6️⃣ Check wallet balance
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    if (new Decimal(wallet.balance).lessThan(finalPrice)) {
+      throw new BadRequestException(
+        `Insufficient wallet balance. Required: ${finalPrice.toNumber()} VND, Available: ${new Decimal(wallet.balance).toNumber()} VND`,
+      );
+    }
+
+    // 7️⃣ Create BookingGroup + all Bookings + Deduct from wallet in transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Deduct from wallet
+      const balanceBefore = new Decimal(wallet.balance);
+      const balanceAfter = balanceBefore.sub(finalPrice);
+
+      const updatedWallet = await tx.wallet.update({
+        where: { userId },
+        data: {
+          balance: balanceAfter,
+        },
+      });
+
+      // Create wallet transaction record
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'PAYMENT',
+          amount: finalPrice,
+          balanceBefore,
+          balanceAfter,
+          description: `Fixed schedule booking: ${totalSessions} sessions on Court ${court.name} (${discountRate.mul(100).toNumber()}% discount applied)`,
+        },
+      });
+
+      // Create BookingGroup
+      const bookingGroup = await tx.bookingGroup.create({
+        data: {
+          userId,
+          courtId,
+          startDate: start,
+          endDate: end,
+          startTime,
+          endTime,
+          daysOfWeek,
+          totalSessions,
+          originalPrice,
+          discountRate,
+          finalPrice,
+          totalPrice: finalPrice,
+          totalPaid: finalPrice,
+          paymentStatus: 'PAID',
+          paymentMethod: 'WALLET',
+          status: 'CONFIRMED',
+          createdBy: 'CUSTOMER',
+        },
+      });
+
+      // Create all individual bookings
+      const createdBookings = [];
+
+      for (let i = 0; i < bookingDates.length; i++) {
+        const bookingDate = bookingDates[i];
+        const price = bookingPrices[i].price;
+
+        const [startHour, startMinute] = startTime.split(':').map(Number);
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+
+        const bookingStart = new Date(bookingDate);
+        bookingStart.setHours(startHour, startMinute, 0, 0);
+
+        const bookingEnd = new Date(bookingDate);
+        bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+        const bookingCode = await this.generateBookingCode();
+
+        const booking = await tx.booking.create({
+          data: {
+            bookingCode,
+            courtId,
+            userId,
+            startTime: bookingStart,
+            endTime: bookingEnd,
+            totalPrice: new Decimal(price),
+            paidAmount: new Decimal(price), // Fully paid
+            status: BookingStatus.CONFIRMED, // Confirmed since paid
+            type: BookingType.REGULAR,
+            paymentMethod: 'WALLET',
+            paymentStatus: PaymentStatus.PAID,
+            createdBy: 'CUSTOMER',
+            bookingGroupId: bookingGroup.id, // Link to group
+          },
+          include: {
+            court: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        createdBookings.push(booking);
+      }
+
+      return { bookingGroup, bookings: createdBookings, wallet: updatedWallet };
+    });
+
+    // 8️⃣ Broadcast events for real-time updates
+    for (const booking of result.bookings) {
+      this.eventsGateway.broadcastNewBooking(booking);
+    }
+
+    this.logger.log(
+      `✅ Fixed schedule booking created: Group #${result.bookingGroup.id} with ${result.bookings.length} bookings`,
+    );
+
+    // 🎫 Generate QR code for the entire group
+    let groupQRCode: string | undefined;
+    try {
+      groupQRCode = await this.qrcodeService.generateGroupQR(
+        result.bookingGroup.id,
+      );
+      this.logger.log(
+        `🎫 QR code generated for booking group #${result.bookingGroup.id}`,
+      );
+    } catch (qrError) {
+      this.logger.warn(
+        `⚠️ Failed to generate QR code for group #${result.bookingGroup.id}`,
+        qrError.stack,
+      );
+    }
+
+    // 9️⃣ Send confirmation email with all booking details
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      });
+
+      if (user?.email) {
+        await this.emailService.sendFixedScheduleConfirmation({
+          customerName: user.name || 'Khách hàng',
+          customerEmail: user.email,
+          courtName: court.name,
+          groupId: result.bookingGroup.id,
+          schedule: `${daysOfWeek.map((d) => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d]).join(', ')} (${startTime} - ${endTime})`,
+          timeRange: `${startTime} - ${endTime}`,
+          period: `${dayjs(start).format('DD/MM/YYYY')} - ${dayjs(end).format('DD/MM/YYYY')}`,
+          totalSessions,
+          originalPrice: `${Number(originalPrice).toLocaleString('vi-VN')}đ`,
+          hasDiscount: discountRate.greaterThan(0),
+          discountRate: discountRate.greaterThan(0)
+            ? Number(discountRate.mul(100))
+            : undefined,
+          discountAmount: discountRate.greaterThan(0)
+            ? `${Number(discountAmount).toLocaleString('vi-VN')}đ`
+            : undefined,
+          finalPrice: `${Number(finalPrice).toLocaleString('vi-VN')}đ`,
+          bookings: result.bookings.map((b) => ({
+            date: dayjs(b.startTime as Date).format('DD/MM/YYYY'),
+            dayName: dayjs(b.startTime as Date).format('dddd'),
+            time: `${dayjs(b.startTime as Date).format('HH:mm')} - ${dayjs(b.endTime as Date).format('HH:mm')}`,
+            bookingCode: b.bookingCode,
+          })),
+          dashboardUrl:
+            process.env.FRONTEND_URL ||
+            'http://localhost:5173/dashboard/bookings',
+          groupQRCode, // Include QR code in email
+        });
+
+        this.logger.log(
+          `📧 Confirmation email sent to ${user.email} for booking group #${result.bookingGroup.id}`,
+        );
+      }
+    } catch (emailError) {
+      // Don't fail the booking if email fails
+      this.logger.warn(
+        `⚠️ Failed to send confirmation email for group #${result.bookingGroup.id}`,
+        emailError.stack,
+      );
+    }
+
+    return {
+      message: `Fixed schedule booking created successfully! 🎉`,
+      bookingGroup: {
+        id: result.bookingGroup.id,
+        totalSessions,
+        originalPrice: Number(originalPrice),
+        discountRate: Number(discountRate.mul(100)), // Convert to percentage
+        discountAmount: Number(discountAmount),
+        finalPrice: Number(finalPrice),
+        status: result.bookingGroup.status,
+        qrCode: groupQRCode, // QR code for the entire group
+      },
+      bookings: result.bookings.map((b) => ({
+        id: b.id,
+        bookingCode: b.bookingCode,
+        date: b.startTime.toISOString().split('T')[0],
+        startTime: b.startTime,
+        endTime: b.endTime,
+        price: Number(b.totalPrice),
+        status: b.status,
+      })),
+      wallet: {
+        newBalance: Number(result.wallet.balance),
+      },
+      summary: {
+        totalSessions,
+        courtName: court.name,
+        schedule: `${daysOfWeek.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')} ${startTime}-${endTime}`,
+        period: `${startDate} to ${endDate}`,
+        discount: discountRate.greaterThan(0)
+          ? `${discountRate.mul(100).toNumber()}% off (saved ${Number(discountAmount)} VND)`
+          : 'No discount',
+      },
+    };
+  }
+
+  /**
+   * 🗓️ Calculate all booking dates based on daysOfWeek
+   *
+   * Example: startDate="2025-01-01", endDate="2025-01-31", daysOfWeek=[1,3]
+   * Returns: All Mondays and Wednesdays in January 2025
+   */
+  private calculateBookingDates(
+    startDate: Date,
+    endDate: Date,
+    daysOfWeek: number[],
+  ): Date[] {
+    const dates: Date[] = [];
+    const current = new Date(startDate);
+
+    // Iterate through each day in the range
+    while (current <= endDate) {
+      const dayOfWeek = current.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+      // If current day matches one of the requested days
+      if (daysOfWeek.includes(dayOfWeek)) {
+        dates.push(new Date(current)); // Clone the date
+      }
+
+      // Move to next day
+      current.setDate(current.getDate() + 1);
+    }
+
+    return dates;
   }
 }

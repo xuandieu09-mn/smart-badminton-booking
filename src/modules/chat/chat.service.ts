@@ -228,7 +228,8 @@ const GET_POS_PRODUCTS: FunctionDeclaration = {
     properties: {
       keyword: {
         type: SchemaType.STRING,
-        description: 'Từ khóa tìm kiếm (tùy chọn). VD: "nước", "vợt", "cầu", "revive"',
+        description:
+          'Từ khóa tìm kiếm (tùy chọn). VD: "nước", "vợt", "cầu", "revive"',
       },
       category: {
         type: SchemaType.STRING,
@@ -241,7 +242,6 @@ const GET_POS_PRODUCTS: FunctionDeclaration = {
     required: [],
   },
 };
-
 
 const CREATE_BOOKING: FunctionDeclaration = {
   name: 'create_booking',
@@ -329,8 +329,13 @@ const AI_TOOLS = [
  */
 function convertToGroqTools() {
   const tools = [];
-  
-  for (const func of [GET_POS_PRODUCTS, CREATE_BOOKING, GET_COURT_AVAILABILITY, GET_USER_BOOKINGS]) {
+
+  for (const func of [
+    GET_POS_PRODUCTS,
+    CREATE_BOOKING,
+    GET_COURT_AVAILABILITY,
+    GET_USER_BOOKINGS,
+  ]) {
     tools.push({
       type: 'function',
       function: {
@@ -340,7 +345,7 @@ function convertToGroqTools() {
       },
     });
   }
-  
+
   return tools;
 }
 
@@ -373,8 +378,10 @@ export class ChatService implements OnModuleInit {
 
   async onModuleInit() {
     // Get AI provider from config
-    this.aiProvider = this.configService.get<string>('AI_PROVIDER') as 'gemini' | 'groq' || 'groq';
-    
+    this.aiProvider =
+      (this.configService.get<string>('AI_PROVIDER') as 'gemini' | 'groq') ||
+      'groq';
+
     if (this.aiProvider === 'groq') {
       await this.initGroq();
     } else {
@@ -388,17 +395,23 @@ export class ChatService implements OnModuleInit {
   private async initGroq() {
     const apiKey = this.configService.get<string>('GROQ_API_KEY');
 
-    if (!apiKey || apiKey.trim() === '' || apiKey === 'your_groq_api_key_here') {
+    if (
+      !apiKey ||
+      apiKey.trim() === '' ||
+      apiKey === 'your_groq_api_key_here'
+    ) {
       this.logger.warn('⚠️ GROQ_API_KEY not configured. AI disabled.');
-      this.logger.warn('👉 Get your free API key from: https://console.groq.com');
+      this.logger.warn(
+        '👉 Get your free API key from: https://console.groq.com',
+      );
       return;
     }
 
     try {
       this.logger.log('🚀 Initializing SmartCourt AI with Groq...');
-      
+
       this.groqClient = new Groq({ apiKey });
-      
+
       // Test connection
       const testResponse = await this.groqClient.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
@@ -408,8 +421,12 @@ export class ChatService implements OnModuleInit {
 
       if (testResponse.choices[0]?.message) {
         this.isInitialized = true;
-        this.logger.log('✅ SmartCourt AI initialized with Groq (llama-3.3-70b-versatile)');
-        this.logger.log('🛠️ Tools: 4 functions (POS, Booking, Availability, User Bookings)');
+        this.logger.log(
+          '✅ SmartCourt AI initialized with Groq (llama-3.3-70b-versatile)',
+        );
+        this.logger.log(
+          '🛠️ Tools: 4 functions (POS, Booking, Availability, User Bookings)',
+        );
       }
     } catch (error) {
       this.logger.error(`❌ Groq init failed: ${error.message}`);
@@ -519,7 +536,8 @@ export class ChatService implements OnModuleInit {
       if (products.length === 0) {
         return {
           success: true,
-          message: '❌ **Không tìm thấy sản phẩm**\n\n💡 Vui lòng thử từ khóa khác hoặc xem tất cả sản phẩm.',
+          message:
+            '❌ **Không tìm thấy sản phẩm**\n\n💡 Vui lòng thử từ khóa khác hoặc xem tất cả sản phẩm.',
           products: [],
           // 🆕 PHASE 3: Suggested actions when no results
           suggestedActions: [
@@ -555,7 +573,8 @@ export class ChatService implements OnModuleInit {
       this.logger.error(`❌ Error in get_pos_products: ${error.message}`);
       return {
         success: false,
-        error: '❌ **Không thể tra cứu sản phẩm lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
+        error:
+          '❌ **Không thể tra cứu sản phẩm lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
@@ -583,7 +602,8 @@ export class ChatService implements OnModuleInit {
       if (!userId) {
         return {
           success: false,
-          error: '🔒 **Bạn cần đăng nhập để đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
+          error:
+            '🔒 **Bạn cần đăng nhập để đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
         };
       }
 
@@ -591,7 +611,8 @@ export class ChatService implements OnModuleInit {
       if (!args.courtId || !args.date || !args.time || !args.duration) {
         return {
           success: false,
-          error: '❌ **Thiếu thông tin đặt sân**\n\n📋 Vui lòng cung cấp:\n• Số sân (1-5)\n• Ngày (VD: 2025-12-22)\n• Giờ (VD: 18:00)\n• Thời lượng (VD: 2 giờ)',
+          error:
+            '❌ **Thiếu thông tin đặt sân**\n\n📋 Vui lòng cung cấp:\n• Số sân (1-5)\n• Ngày (VD: 2025-12-22)\n• Giờ (VD: 18:00)\n• Thời lượng (VD: 2 giờ)',
         };
       }
 
@@ -607,7 +628,8 @@ export class ChatService implements OnModuleInit {
       if (startDateTime < new Date()) {
         return {
           success: false,
-          error: '⏰ **Không thể đặt sân trong quá khứ**\n\n💡 Vui lòng chọn thời gian trong tương lai.',
+          error:
+            '⏰ **Không thể đặt sân trong quá khứ**\n\n💡 Vui lòng chọn thời gian trong tương lai.',
         };
       }
 
@@ -622,7 +644,8 @@ export class ChatService implements OnModuleInit {
       if (args.courtId < 1 || args.courtId > 5) {
         return {
           success: false,
-          error: '🏸 **Số sân không hợp lệ**\n\n✅ Sân khả dụng: **Sân 1, 2, 3, 4, 5**\n\n💡 Vui lòng chọn số sân từ 1 đến 5.',
+          error:
+            '🏸 **Số sân không hợp lệ**\n\n✅ Sân khả dụng: **Sân 1, 2, 3, 4, 5**\n\n💡 Vui lòng chọn số sân từ 1 đến 5.',
         };
       }
 
@@ -630,7 +653,8 @@ export class ChatService implements OnModuleInit {
       if (args.duration < 1 || args.duration > 8) {
         return {
           success: false,
-          error: '⏱️ **Thời lượng không hợp lệ**\n\n✅ Thời lượng đặt sân: **1-8 giờ**\n\n💡 Vui lòng chọn thời lượng từ 1 đến 8 giờ.',
+          error:
+            '⏱️ **Thời lượng không hợp lệ**\n\n✅ Thời lượng đặt sân: **1-8 giờ**\n\n💡 Vui lòng chọn thời lượng từ 1 đến 8 giờ.',
         };
       }
 
@@ -640,7 +664,7 @@ export class ChatService implements OnModuleInit {
         const isPeakHour = hour >= 17; // 17h-21h = peak
         const pricePerHour = isPeakHour ? 100000 : 50000;
         const totalPrice = pricePerHour * args.duration;
-        
+
         const dateFormatted = startDateTime.toLocaleDateString('vi-VN', {
           weekday: 'long',
           day: '2-digit',
@@ -707,21 +731,24 @@ export class ChatService implements OnModuleInit {
       ) {
         return {
           success: false,
-          error: '⚠️ **Sân đã được đặt**\n\n❌ Sân này đã có người đặt trong khung giờ bạn chọn.\n\n💡 **Gợi ý:**\n• Chọn giờ khác\n• Chọn sân khác\n• Hỏi "còn sân nào trống?" để xem lịch',
+          error:
+            '⚠️ **Sân đã được đặt**\n\n❌ Sân này đã có người đặt trong khung giờ bạn chọn.\n\n💡 **Gợi ý:**\n• Chọn giờ khác\n• Chọn sân khác\n• Hỏi "còn sân nào trống?" để xem lịch',
         };
       }
 
       if (error.message?.includes('Court not found')) {
         return {
           success: false,
-          error: '🏸 **Không tìm thấy sân**\n\n❌ Sân bạn chọn không tồn tại hoặc đã ngừng hoạt động.\n\n💡 Vui lòng chọn số sân từ **1 đến 5**.',
+          error:
+            '🏸 **Không tìm thấy sân**\n\n❌ Sân bạn chọn không tồn tại hoặc đã ngừng hoạt động.\n\n💡 Vui lòng chọn số sân từ **1 đến 5**.',
         };
       }
 
       if (error.message?.includes('Insufficient balance')) {
         return {
           success: false,
-          error: '💰 **Số dư không đủ**\n\n❌ Tài khoản của bạn không đủ tiền để đặt sân.\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.',
+          error:
+            '💰 **Số dư không đủ**\n\n❌ Tài khoản của bạn không đủ tiền để đặt sân.\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.',
         };
       }
 
@@ -755,7 +782,8 @@ export class ChatService implements OnModuleInit {
       if (courts.length === 0) {
         return {
           success: true,
-          message: '❌ **Hiện tại không có sân nào trong hệ thống**\n\n💡 Vui lòng liên hệ hotline: **1900-8888**',
+          message:
+            '❌ **Hiện tại không có sân nào trong hệ thống**\n\n💡 Vui lòng liên hệ hotline: **1900-8888**',
           courts: [],
         };
       }
@@ -839,9 +867,10 @@ export class ChatService implements OnModuleInit {
       // 🆕 PHASE 3: Enhanced response with suggested actions
       return {
         success: true,
-        message: slots.filter(s => !s.isFull).length > 0 
-          ? `✅ Tìm thấy **${slots.filter(s => !s.isFull).length}** khung giờ còn trống` 
-          : '⚠️ **Tất cả khung giờ đã đầy**',
+        message:
+          slots.filter((s) => !s.isFull).length > 0
+            ? `✅ Tìm thấy **${slots.filter((s) => !s.isFull).length}** khung giờ còn trống`
+            : '⚠️ **Tất cả khung giờ đã đầy**',
         date: formatDate,
         dateKey,
         totalCourts: courts.length,
@@ -857,23 +886,25 @@ export class ChatService implements OnModuleInit {
           availableSlots: slots.filter((s) => !s.isFull).length,
         },
         // 🆕 PHASE 3: Suggested actions after viewing availability
-        suggestedActions: slots.filter(s => !s.isFull).length > 0 
-          ? [
-              '🏸 Đặt sân ngay (nếu đã đăng nhập)',
-              '📅 Xem sân trống ngày khác',
-              '🥤 Xem menu đồ uống',
-            ]
-          : [
-              '📅 Xem sân trống ngày mai',
-              '📋 Xem lịch đặt của bạn',
-              '🥤 Xem menu đồ uống',
-            ],
+        suggestedActions:
+          slots.filter((s) => !s.isFull).length > 0
+            ? [
+                '🏸 Đặt sân ngay (nếu đã đăng nhập)',
+                '📅 Xem sân trống ngày khác',
+                '🥤 Xem menu đồ uống',
+              ]
+            : [
+                '📅 Xem sân trống ngày mai',
+                '📋 Xem lịch đặt của bạn',
+                '🥤 Xem menu đồ uống',
+              ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_court_availability: ${error.message}`);
       return {
         success: false,
-        error: '❌ **Không thể tra cứu sân trống lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
+        error:
+          '❌ **Không thể tra cứu sân trống lúc này**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
@@ -895,7 +926,8 @@ export class ChatService implements OnModuleInit {
       if (!userId) {
         return {
           success: false,
-          error: '🔒 **Bạn cần đăng nhập để xem lịch đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
+          error:
+            '🔒 **Bạn cần đăng nhập để xem lịch đặt sân**\n\n💡 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng này.',
         };
       }
 
@@ -942,30 +974,34 @@ export class ChatService implements OnModuleInit {
       }));
 
       // 🆕 PHASE 3: Check for pending payments
-      const pendingPayments = bookings.filter(b => b.paymentStatus === 'UNPAID');
+      const pendingPayments = bookings.filter(
+        (b) => b.paymentStatus === 'UNPAID',
+      );
 
       return {
         success: true,
         message: `✅ Bạn có **${bookings.length} lịch đặt sân** sắp tới`,
         bookings: bookingList,
         // 🆕 PHASE 3: Suggested actions based on booking status
-        suggestedActions: pendingPayments.length > 0
-          ? [
-              `💰 Thanh toán ${pendingPayments.length} booking chưa thanh toán`,
-              '🏸 Đặt thêm sân mới',
-              '📅 Xem sân trống',
-            ]
-          : [
-              '🏸 Đặt thêm sân mới',
-              '📅 Xem sân trống hôm nay',
-              '🥤 Xem menu đồ uống',
-            ],
+        suggestedActions:
+          pendingPayments.length > 0
+            ? [
+                `💰 Thanh toán ${pendingPayments.length} booking chưa thanh toán`,
+                '🏸 Đặt thêm sân mới',
+                '📅 Xem sân trống',
+              ]
+            : [
+                '🏸 Đặt thêm sân mới',
+                '📅 Xem sân trống hôm nay',
+                '🥤 Xem menu đồ uống',
+              ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_user_bookings: ${error.message}`);
       return {
         success: false,
-        error: '❌ **Không thể tra cứu lịch đặt sân**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
+        error:
+          '❌ **Không thể tra cứu lịch đặt sân**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
@@ -1022,7 +1058,9 @@ export class ChatService implements OnModuleInit {
     userId?: number | null,
     history?: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
   ): Promise<string> {
-    this.logger.log(`💬 User ${userId || 'anonymous'}: "${message}" (history: ${history?.length || 0} messages)`);
+    this.logger.log(
+      `💬 User ${userId || 'anonymous'}: "${message}" (history: ${history?.length || 0} messages)`,
+    );
 
     // Fallback if AI not ready
     if (!this.isInitialized) {
@@ -1036,14 +1074,18 @@ export class ChatService implements OnModuleInit {
     const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     const dateContext = `[CONTEXT: Hôm nay là ${currentDate}, hiện tại là ${currentTime}]`;
     const messageWithContext = `${dateContext}\n\n${message}`;
-    
+
     this.logger.log(`📅 Current date context: ${currentDate} ${currentTime}`);
 
     // Route to appropriate AI provider
     if (this.aiProvider === 'groq') {
       return this.generateResponseWithGroq(messageWithContext, userId, history);
     } else {
-      return this.generateResponseWithGemini(messageWithContext, userId, history);
+      return this.generateResponseWithGemini(
+        messageWithContext,
+        userId,
+        history,
+      );
     }
   }
 
@@ -1061,9 +1103,7 @@ export class ChatService implements OnModuleInit {
 
     try {
       // Convert history to Groq format
-      const messages: any[] = [
-        { role: 'system', content: SYSTEM_INSTRUCTION }
-      ];
+      const messages: any[] = [{ role: 'system', content: SYSTEM_INSTRUCTION }];
 
       // Add history if provided
       if (history && history.length > 0) {
@@ -1089,24 +1129,24 @@ export class ChatService implements OnModuleInit {
       });
 
       const choice = response.choices[0];
-      
+
       // Check if function calls are needed
       if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
         // Execute function calls
         const toolResults: any[] = [];
-        
+
         for (const toolCall of choice.message.tool_calls) {
           const functionName = toolCall.function.name;
           const functionArgs = JSON.parse(toolCall.function.arguments);
-          
+
           this.logger.log(`🔧 Executing function: ${functionName}`);
           this.logger.log(`📦 Args: ${JSON.stringify(functionArgs)}`);
-          
+
           const result = await this.executeFunction(
             { name: functionName, args: functionArgs },
             userId,
           );
-          
+
           toolResults.push({
             tool_call_id: toolCall.id,
             role: 'tool',
@@ -1127,13 +1167,15 @@ export class ChatService implements OnModuleInit {
         });
 
         this.logger.log('🤖 AI Response with function results');
-        return finalResponse.choices[0].message.content || this.getFallbackResponse(message);
+        return (
+          finalResponse.choices[0].message.content ||
+          this.getFallbackResponse(message)
+        );
       }
 
       // No function calls, return text directly
       this.logger.log('🤖 AI Response (no function calls)');
       return choice.message.content || this.getFallbackResponse(message);
-      
     } catch (error) {
       this.logger.error(`❌ Groq error: ${error.message}`);
       return this.getFallbackResponse(message);
@@ -1165,7 +1207,7 @@ export class ChatService implements OnModuleInit {
         }
 
         // Start chat session với history từ frontend
-        const chat: ChatSession = this.model.startChat({ 
+        const chat: ChatSession = this.model.startChat({
           history: history || [],
         });
 

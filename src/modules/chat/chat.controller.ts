@@ -1,6 +1,5 @@
-import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthGuard } from '@nestjs/passport';
 import { ChatService } from './chat.service';
 import { ChatMessageDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -33,13 +32,13 @@ export class ChatController {
   ): Promise<{ reply: string }> {
     // Extract userId from request user OR from JWT token (optional auth)
     let userId: number | null = null;
-    
+
     // Try to get userId from req.user (if AuthGuard was used)
     if (req.user) {
       const user = req.user as RequestUser;
       userId = this.extractUserId(user);
       console.log('✅ UserId from req.user:', userId);
-    } 
+    }
     // Otherwise, try to parse JWT token manually (optional authentication)
     else {
       const authHeader = req.headers.authorization;
