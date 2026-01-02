@@ -20,6 +20,8 @@ interface Message {
   content: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+  suggestedActions?: string[]; // Quick action buttons
+  bookingCard?: any; // Booking preview data
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -37,12 +39,52 @@ const ChatWidget: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { accessToken } = useAuthStore();
   // ✅ Fallback: Get token from localStorage if not in store (after old persist format)
   const token = accessToken || localStorage.getItem('access_token');
+
+  // Load chat history when widget opens
+  useEffect(() => {
+    if (isOpen && !historyLoaded && token) {
+      loadChatHistory();
+    }
+  }, [isOpen, historyLoaded, token]);
+
+  // Load chat history from backend
+  const loadChatHistory = async () => {
+    try {
+      console.log('📜 Loading chat history...');
+      const response = await fetch(`${API_BASE_URL}/chat/history?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Chat history loaded:', data.messages.length, 'messages');
+        
+        if (data.messages && data.messages.length > 0) {
+          // Convert timestamp strings to Date objects
+          const messagesWithDates = data.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }));
+          
+          // Replace welcome message with history
+          setMessages(messagesWithDates);
+        }
+        setHistoryLoaded(true);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load chat history:', error);
+      setHistoryLoaded(true); // Don't retry
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
@@ -124,6 +166,8 @@ const ChatWidget: React.FC = () => {
         content: data.reply,
         sender: 'bot',
         timestamp: new Date(),
+        suggestedActions: data.suggestedActions, // Quick action buttons
+        bookingCard: data.bookingCard, // Booking preview
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -266,6 +310,24 @@ const ChatWidget: React.FC = () => {
                   {message.timestamp.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
+
+              {/* Quick Action Buttons */}
+              {message.sender === 'bot' && message.suggestedActions && message.suggestedActions.length > 0 && (
+                <div className="w-full max-w-[75%] mt-2 flex flex-wrap gap-2">
+                  {message.suggestedActions.map((action, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setInputValue(action);
+                        sendMessage();
+                      }}
+                      className="px-3 py-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 hover:shadow-sm"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* User Avatar */}
               {message.sender === 'user' && (

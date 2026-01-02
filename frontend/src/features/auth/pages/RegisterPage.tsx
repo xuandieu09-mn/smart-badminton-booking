@@ -50,7 +50,15 @@ export const RegisterPage = () => {
       alert('Đăng ký thành công! Vui lòng đăng nhập.');
       navigate('/auth/login');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Đăng ký thất bại');
+      const errorMessage = err.response?.data?.message;
+      
+      if (errorMessage?.includes('already registered') || errorMessage?.includes('Email already')) {
+        setError('❌ Email này đã được đăng ký. Vui lòng sử dụng email khác!');
+      } else if (err.response?.status === 409) {
+        setError('❌ Thông tin đã tồn tại trong hệ thống!');
+      } else {
+        setError(`❌ ${errorMessage || 'Đăng ký thất bại. Vui lòng thử lại!'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -61,8 +69,15 @@ export const RegisterPage = () => {
       <h2 className="text-2xl font-bold text-center mb-6">Đăng ký tài khoản</h2>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
-          {error}
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md animate-shake">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
+            </svg>
+            <div className="flex-1">
+              <p className="font-semibold text-sm">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -74,7 +89,10 @@ export const RegisterPage = () => {
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(''); // Clear error khi user gõ
+            }}
             placeholder="Nguyễn Văn A"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
@@ -88,7 +106,10 @@ export const RegisterPage = () => {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError('');
+            }}
             placeholder="email@example.com"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
@@ -102,7 +123,10 @@ export const RegisterPage = () => {
           <input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              setError('');
+            }}
             placeholder="0901234567"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
@@ -117,7 +141,10 @@ export const RegisterPage = () => {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError('');
+            }}
             placeholder="Tối thiểu 6 ký tự"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
@@ -132,7 +159,10 @@ export const RegisterPage = () => {
           <input
             type="password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setError('');
+            }}
             placeholder="Nhập lại mật khẩu"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required

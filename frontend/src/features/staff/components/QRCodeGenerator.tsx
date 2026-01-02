@@ -46,15 +46,26 @@ export const QRCodeGenerator: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Filter only CONFIRMED bookings
+      // Get today's date at midnight for comparison
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Filter CONFIRMED bookings for TODAY only
       const confirmedBookings = response.data.bookings.filter(
-        (b: Booking) => b.status === 'CONFIRMED',
+        (b: Booking) => {
+          if (b.status !== 'CONFIRMED') return false;
+          
+          const bookingDate = new Date(b.startTime);
+          return bookingDate >= today && bookingDate < tomorrow;
+        }
       );
       setBookings(confirmedBookings);
 
       if (confirmedBookings.length === 0) {
         alert(
-          '⚠️ Không tìm thấy booking nào có trạng thái CONFIRMED. Vui lòng tạo booking trước!',
+          '⚠️ Không tìm thấy booking nào cho ngày hôm nay. Vui lòng tạo booking cho hôm nay trước!',
         );
       }
     } catch (error: any) {
@@ -122,10 +133,17 @@ export const QRCodeGenerator: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg p-6">
-        <h2 className="text-2xl font-bold mb-2">🎫 Tạo mã QR Check-in</h2>
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold">🎫 Tạo mã QR Check-in</h2>
+        </div>
         <p className="text-purple-100">
-          Chọn booking để tạo QR code và test tính năng quét
+          📅 Hiển thị booking cho ngày hôm nay - {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
         </p>
       </div>
 
@@ -134,9 +152,22 @@ export const QRCodeGenerator: React.FC = () => {
         <button
           onClick={fetchBookings}
           disabled={isLoading}
-          className="w-full py-4 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:bg-gray-300"
+          className="w-full py-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:from-gray-300 disabled:to-gray-400"
         >
-          {isLoading ? '⏳ Đang tải...' : '📋 Tải danh sách booking'}
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>Đang tải...</span>
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <span>📋</span>
+              <span>Tải booking hôm nay</span>
+            </span>
+          )}
         </button>
       )}
 

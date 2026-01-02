@@ -32,7 +32,18 @@ export const LoginPage = () => {
         navigate('/calendar');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+      // ✅ Cải thiện message lỗi rõ ràng hơn
+      const errorMessage = err.response?.data?.message || err.message;
+      
+      if (err.response?.status === 401) {
+        setError('❌ Email hoặc mật khẩu không chính xác. Vui lòng thử lại!');
+      } else if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        setError('⏱️ Kết nối timeout. Vui lòng kiểm tra mạng và thử lại!');
+      } else if (err.response?.status === 403) {
+        setError('🔒 Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên!');
+      } else {
+        setError(`❌ Đăng nhập thất bại: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,8 +54,15 @@ export const LoginPage = () => {
       <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          {error}
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md animate-shake">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
+            </svg>
+            <div className="flex-1">
+              <p className="font-semibold text-sm">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -56,7 +74,10 @@ export const LoginPage = () => {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(''); // ✅ Clear error khi user gõ lại
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
@@ -69,7 +90,10 @@ export const LoginPage = () => {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError(''); // ✅ Clear error khi user gõ lại
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />

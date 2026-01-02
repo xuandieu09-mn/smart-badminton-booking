@@ -26,6 +26,8 @@ model User {
   notifications        Notification[]
   staffSales           Sale[]            @relation("StaffSales")
   wallet               Wallet?
+  chatMessages         ChatMessage[]
+  chatAnalytics        ChatAnalytics[]
 }
 
 model Court {
@@ -348,4 +350,38 @@ enum InventoryActionType {
   PRICE_UPDATE
   DAMAGE
   SALE
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🆕 PHASE 4: Chat System - History & Analytics
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  role      String   // 'user' | 'bot'
+  content   String   @db.Text
+  metadata  Json?    // { toolUsed, bookingId, suggestedActions, etc }
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model ChatAnalytics {
+  id           Int      @id @default(autoincrement())
+  userId       Int?
+  query        String   @db.Text // User's question
+  intent       String?  // booking, info, support, product, cancel, wallet
+  wasResolved  Boolean  @default(false) // Did AI answer successfully?
+  toolUsed     String?  // Which tool was called
+  responseTime Int?     // Response time in ms
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([intent])
+  @@index([wasResolved])
 }

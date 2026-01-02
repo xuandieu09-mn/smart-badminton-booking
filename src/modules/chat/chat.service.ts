@@ -13,6 +13,7 @@ import Groq from 'groq-sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductsService } from '../pos/products.service';
 import { BookingsService } from '../bookings/bookings.service';
+import { PaymentsService } from '../payments/payments.service';
 import { Role, PaymentMethod, BookingType } from '@prisma/client';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -312,6 +313,108 @@ const GET_USER_BOOKINGS: FunctionDeclaration = {
   },
 };
 
+const CANCEL_BOOKING: FunctionDeclaration = {
+  name: 'cancel_booking',
+  description:
+    '🆕 PHASE 4: Hủy booking đã đặt. GỌI KHI: khách hỏi "hủy sân", "cancel booking", "xóa lịch đặt". Tính phí hủy theo chính sách: >24h hoàn 100%, >12h hoàn 50%, <12h không hoàn. YÊU CẦU đăng nhập.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      bookingCode: {
+        type: SchemaType.STRING,
+        description: 'Mã booking cần hủy (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
+      },
+      reason: {
+        type: SchemaType.STRING,
+        description: 'Lý do hủy (tùy chọn). VD: "Bận việc đột xuất", "Thời tiết xấu"',
+      },
+      confirmed: {
+        type: SchemaType.BOOLEAN,
+        description: '🆕 true khi khách đã xác nhận hủy sau khi được thông báo phí.',
+      },
+    },
+    required: ['bookingCode'],
+  },
+};
+
+const GET_WALLET_BALANCE: FunctionDeclaration = {
+  name: 'get_wallet_balance',
+  description:
+    '🆕 PHASE 4: Xem số dư ví điện tử. GỌI KHI: khách hỏi "ví của tôi", "số dư", "còn bao nhiêu tiền", "tài khoản". YÊU CẦU đăng nhập.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {},
+    required: [],
+  },
+};
+
+const CREATE_FIXED_SCHEDULE_BOOKING: FunctionDeclaration = {
+  name: 'create_fixed_schedule_booking',
+  description:
+    '🆕 PHASE 4: Đặt sân theo lịch cố định (VD: T2-T4-T6 hàng tuần, 18h-20h). GỌI KHI: khách hỏi "đặt sân cố định", "đặt theo tuần", "lịch đặt định kỳ". Có giảm giá: >4 buổi giảm 5%, >8 buổi giảm 10%. YÊU CẦU đăng nhập.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      daysOfWeek: {
+        type: SchemaType.ARRAY,
+        description: 'Các ngày trong tuần (1=T2, 2=T3, ..., 7=CN). VD: [1,3,5] = T2-T4-T6',
+        items: { type: SchemaType.NUMBER },
+      },
+      startDate: {
+        type: SchemaType.STRING,
+        description: 'Ngày bắt đầu (YYYY-MM-DD). VD: "2026-01-01"',
+      },
+      endDate: {
+        type: SchemaType.STRING,
+        description: 'Ngày kết thúc (YYYY-MM-DD). VD: "2026-03-31"',
+      },
+      courtId: {
+        type: SchemaType.NUMBER,
+        description: 'Số sân (1-5)',
+      },
+      time: {
+        type: SchemaType.STRING,
+        description: 'Giờ bắt đầu (HH:mm). VD: "18:00"',
+      },
+      duration: {
+        type: SchemaType.NUMBER,
+        description: 'Số giờ mỗi buổi (1-4)',
+      },
+      confirmed: {
+        type: SchemaType.BOOLEAN,
+        description: '🆕 true khi khách đã xác nhận sau khi xem tổng chi phí + giảm giá.',
+      },
+    },
+    required: ['daysOfWeek', 'startDate', 'endDate', 'courtId', 'time', 'duration'],
+  },
+};
+
+const PAYMENT: FunctionDeclaration = {
+  name: 'payment',
+  description:
+    '🆕 PHASE 4: Thanh toán booking bằng ví điện tử. GỌI KHI: khách hỏi "thanh toán", "trả tiền", "payment". Có 2 phương thức: WALLET (từ ví) hoặc VNPAY (chuyển khoản). YÊU CẦU đăng nhập.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      bookingCode: {
+        type: SchemaType.STRING,
+        description: 'Mã booking cần thanh toán (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
+      },
+      paymentMethod: {
+        type: SchemaType.STRING,
+        description: 'Phương thức thanh toán: "WALLET" (ví điện tử) hoặc "VNPAY" (chuyển khoản)',
+        format: 'enum',
+        enum: ['WALLET', 'VNPAY'],
+      },
+      confirmed: {
+        type: SchemaType.BOOLEAN,
+        description: '🆕 true khi khách đã xác nhận thanh toán sau khi xem số tiền.',
+      },
+    },
+    required: ['bookingCode', 'paymentMethod'],
+  },
+};
+
 // Tools array
 const AI_TOOLS = [
   {
@@ -320,6 +423,10 @@ const AI_TOOLS = [
       CREATE_BOOKING,
       GET_COURT_AVAILABILITY,
       GET_USER_BOOKINGS,
+      CANCEL_BOOKING,
+      GET_WALLET_BALANCE,
+      CREATE_FIXED_SCHEDULE_BOOKING,
+      PAYMENT,
     ],
   },
 ];
@@ -335,6 +442,9 @@ function convertToGroqTools() {
     CREATE_BOOKING,
     GET_COURT_AVAILABILITY,
     GET_USER_BOOKINGS,
+    CANCEL_BOOKING,
+    GET_WALLET_BALANCE,
+    CREATE_FIXED_SCHEDULE_BOOKING,
   ]) {
     tools.push({
       type: 'function',
@@ -367,6 +477,7 @@ export class ChatService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly productsService: ProductsService,
     private readonly bookingsService: BookingsService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   /**
@@ -658,9 +769,39 @@ export class ChatService implements OnModuleInit {
         };
       }
 
-      // 🆕 PHASE 3: CONFIRMATION STEP - Ask before booking
+      // 🆕 PHASE 3: CONFIRMATION STEP - Check availability BEFORE asking confirmation
       if (!args.confirmed) {
-        // Calculate price
+        // ✅ CHECK SÂN TRỐNG TRƯỚC KHI HỎI XÁC NHẬN
+        const existingBooking = await this.prisma.booking.findFirst({
+          where: {
+            courtId: args.courtId,
+            startTime: { lte: endDateTime },
+            endTime: { gte: startDateTime },
+            status: {
+              notIn: ['CANCELLED', 'CANCELLED_LATE', 'EXPIRED'],
+            },
+          },
+          include: {
+            court: { select: { name: true } },
+          },
+        });
+
+        // ❌ Nếu sân đã được đặt → Thông báo luôn, KHÔNG hỏi confirm
+        if (existingBooking) {
+          const bookedTime = `${new Date(existingBooking.startTime).getHours()}:${String(new Date(existingBooking.startTime).getMinutes()).padStart(2, '0')} - ${new Date(existingBooking.endTime).getHours()}:${String(new Date(existingBooking.endTime).getMinutes()).padStart(2, '0')}`;
+          
+          return {
+            success: false,
+            error: `⚠️ **Sân ${args.courtId} đã được đặt!**\n\n❌ Khung giờ **${args.time} - ${endDateTime.getHours()}:${String(endDateTime.getMinutes()).padStart(2, '0')}** đã có người đặt (Booking: ${existingBooking.bookingCode}).\n\n💡 **Gợi ý:**\n• Chọn giờ khác (VD: sau ${bookedTime})\n• Chọn sân khác (Sân 1-5)\n• Hỏi "Còn sân nào trống hôm nay?" để xem lịch`,
+            suggestedActions: [
+              '📅 Xem sân trống hôm nay',
+              '🏸 Đặt sân khác',
+              '🕐 Đặt giờ khác',
+            ],
+          };
+        }
+
+        // ✅ SÂN TRỐNG → Tính giá và hỏi xác nhận
         const isPeakHour = hour >= 17; // 17h-21h = peak
         const pricePerHour = isPeakHour ? 100000 : 50000;
         const totalPrice = pricePerHour * args.duration;
@@ -675,7 +816,7 @@ export class ChatService implements OnModuleInit {
         return {
           success: false,
           requiresConfirmation: true,
-          message: `📋 **Xác nhận thông tin đặt sân:**\n\n🏸 **Sân:** Sân ${args.courtId}\n📅 **Ngày:** ${dateFormatted}\n🕐 **Giờ:** ${args.time} - ${endDateTime.getHours()}:${String(endDateTime.getMinutes()).padStart(2, '0')}\n⏱️ **Thời lượng:** ${args.duration} giờ\n💰 **Tổng tiền:** ${totalPrice.toLocaleString('vi-VN')}đ ${isPeakHour ? '(Giờ cao điểm)' : '(Giờ thường)'}\n\n✅ Bạn có chắc chắn muốn đặt sân này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận đặt sân.`,
+          message: `✅ **Sân ${args.courtId} còn trống!**\n\n📋 **Xác nhận thông tin đặt sân:**\n\n🏸 **Sân:** Sân ${args.courtId}\n📅 **Ngày:** ${dateFormatted}\n🕐 **Giờ:** ${args.time} - ${endDateTime.getHours()}:${String(endDateTime.getMinutes()).padStart(2, '0')}\n⏱️ **Thời lượng:** ${args.duration} giờ\n💰 **Tổng tiền:** ${totalPrice.toLocaleString('vi-VN')}đ ${isPeakHour ? '(Giờ cao điểm)' : '(Giờ thường)'}\n\n❓ Bạn có chắc chắn muốn đặt sân này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận đặt sân.`,
           bookingInfo: {
             courtId: args.courtId,
             date: args.date,
@@ -975,7 +1116,7 @@ export class ChatService implements OnModuleInit {
 
       // 🆕 PHASE 3: Check for pending payments
       const pendingPayments = bookings.filter(
-        (b) => b.paymentStatus === 'UNPAID',
+        (b) => b && b.paymentStatus === 'UNPAID',
       );
 
       return {
@@ -986,7 +1127,7 @@ export class ChatService implements OnModuleInit {
         suggestedActions:
           pendingPayments.length > 0
             ? [
-                `💰 Thanh toán ${pendingPayments.length} booking chưa thanh toán`,
+                `💰 Thanh toán ${pendingPayments.length} booking`,
                 '🏸 Đặt thêm sân mới',
                 '📅 Xem sân trống',
               ]
@@ -1007,7 +1148,409 @@ export class ChatService implements OnModuleInit {
   }
 
   /**
-   * 🔄 Execute a function call from AI
+   * � cancel_booking - Hủy booking
+   * 🆕 PHASE 4: New tool for canceling bookings
+   */
+  private async handleCancelBooking(
+    args: { bookingCode: string; reason?: string; confirmed?: boolean },
+    userId: number | null,
+  ): Promise<object> {
+    try {
+      this.logger.log(`🚫 [Function] cancel_booking: ${JSON.stringify(args)}, userId: ${userId}`);
+
+      if (!userId) {
+        return {
+          success: false,
+          error: '🔒 **Bạn cần đăng nhập để hủy booking**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+        };
+      }
+
+      // Find booking
+      const booking = await this.prisma.booking.findFirst({
+        where: {
+          bookingCode: args.bookingCode,
+          userId,
+        },
+        include: { court: true },
+      });
+
+      if (!booking) {
+        return {
+          success: false,
+          error: `❌ **Không tìm thấy booking ${args.bookingCode}**\n\n💡 Vui lòng kiểm tra lại mã booking hoặc dùng "Xem lịch của tôi" để xem tất cả booking.`,
+        };
+      }
+
+      if (booking.status === 'CANCELLED') {
+        return {
+          success: false,
+          error: `⚠️ **Booking này đã bị hủy trước đó**\n\n📅 Ngày: ${new Date(booking.startTime).toLocaleDateString('vi-VN')}\n🕐 Giờ: ${new Date(booking.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`,
+        };
+      }
+
+      // Calculate refund policy
+      const now = new Date();
+      const startTime = new Date(booking.startTime);
+      const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      
+      let refundPercent = 0;
+      if (hoursUntilStart >= 24) {
+        refundPercent = 100;
+      } else if (hoursUntilStart >= 12) {
+        refundPercent = 50;
+      } else {
+        refundPercent = 0;
+      }
+
+      const totalPrice = Number(booking.totalPrice);
+      const refundAmount = Math.floor((totalPrice * refundPercent) / 100);
+
+      // Confirmation step
+      if (!args.confirmed) {
+        return {
+          success: false,
+          requiresConfirmation: true,
+          message: `⚠️ **Xác nhận hủy booking:**\n\n📋 **Thông tin:**\n• Mã booking: ${booking.bookingCode}\n• Sân: ${booking.court.name}\n• Ngày: ${new Date(booking.startTime).toLocaleDateString('vi-VN')}\n• Giờ: ${new Date(booking.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(booking.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}\n\n💰 **Chính sách hoàn tiền:**\n• Tổng tiền: ${totalPrice.toLocaleString('vi-VN')}đ\n• Thời gian còn lại: ${Math.floor(hoursUntilStart)} giờ\n• Hoàn lại: **${refundPercent}%** = **${refundAmount.toLocaleString('vi-VN')}đ**\n\n✅ Bạn có chắc chắn muốn hủy booking này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận hủy.`,
+          bookingInfo: {
+            bookingCode: args.bookingCode,
+            refundPercent,
+            refundAmount,
+          },
+        };
+      }
+
+      // Execute cancellation via bookingsService
+      await this.bookingsService.cancelBooking(booking.id, userId);
+
+      return {
+        success: true,
+        message: `✅ **Đã hủy booking thành công!**\n\n📋 Mã booking: ${booking.bookingCode}\n💰 Hoàn lại: **${refundAmount.toLocaleString('vi-VN')}đ** (${refundPercent}%)\n\n💡 Tiền đã được hoàn vào ví của bạn.`,
+        refund: {
+          amount: refundAmount,
+          percent: refundPercent,
+        },
+        suggestedActions: [
+          '💰 Xem số dư ví',
+          '🏸 Đặt sân mới',
+          '📅 Xem sân trống hôm nay',
+        ],
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error in cancel_booking: ${error.message}`);
+      return {
+        success: false,
+        error: `❌ **Không thể hủy booking**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại hoặc liên hệ hotline: **1900-8888**`,
+      };
+    }
+  }
+
+  /**
+   * 💰 get_wallet_balance - Xem số dư ví
+   * 🆕 PHASE 4: New tool for checking wallet balance
+   */
+  private async handleGetWalletBalance(userId: number | null): Promise<object> {
+    try {
+      this.logger.log(`💰 [Function] get_wallet_balance, userId: ${userId}`);
+
+      if (!userId) {
+        return {
+          success: false,
+          error: '🔒 **Bạn cần đăng nhập để xem ví**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+        };
+      }
+
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+      });
+
+      if (!wallet) {
+        return {
+          success: false,
+          error: '❌ **Không tìm thấy ví điện tử**\n\n💡 Vui lòng liên hệ admin để kích hoạt ví.',
+        };
+      }
+
+      // Get recent transactions
+      const transactions = await this.prisma.walletTransaction.findMany({
+        where: { walletId: wallet.id },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+
+      const balance = Number(wallet.balance);
+
+      return {
+        success: true,
+        message: `💰 **Thông tin ví của bạn:**\n\n💵 Số dư hiện tại: **${balance.toLocaleString('vi-VN')}đ**`,
+        balance,
+        balanceFormatted: `${balance.toLocaleString('vi-VN')}đ`,
+        recentTransactions: transactions.map(t => ({
+          type: t.type,
+          amount: `${t.type === 'PAYMENT' ? '-' : '+'}${Number(t.amount).toLocaleString('vi-VN')}đ`,
+          description: t.description,
+          date: new Date(t.createdAt).toLocaleDateString('vi-VN'),
+        })),
+        suggestedActions: balance < 100000 
+          ? [
+              '💳 Nạp tiền vào ví',
+              '🏸 Đặt sân (cần đủ tiền)',
+              '📅 Xem sân trống',
+            ]
+          : [
+              '🏸 Đặt sân ngay',
+              '📅 Xem sân trống hôm nay',
+              '🥤 Xem menu đồ uống',
+            ],
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error in get_wallet_balance: ${error.message}`);
+      return {
+        success: false,
+        error: '❌ **Không thể tra cứu ví**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
+      };
+    }
+  }
+
+  /**
+   * 📅 create_fixed_schedule_booking - Đặt lịch cố định
+   * 🆕 PHASE 4: New tool for fixed schedule bookings
+   */
+  private async handleCreateFixedScheduleBooking(
+    args: {
+      daysOfWeek: number[];
+      startDate: string;
+      endDate: string;
+      courtId: number;
+      time: string;
+      duration: number;
+      confirmed?: boolean;
+    },
+    userId: number | null,
+  ): Promise<object> {
+    try {
+      this.logger.log(`📅 [Function] create_fixed_schedule_booking: ${JSON.stringify(args)}, userId: ${userId}`);
+
+      if (!userId) {
+        return {
+          success: false,
+          error: '🔒 **Bạn cần đăng nhập để đặt lịch cố định**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+        };
+      }
+
+      // Validation
+      if (!args.daysOfWeek || args.daysOfWeek.length === 0) {
+        return {
+          success: false,
+          error: '❌ **Thiếu thông tin ngày trong tuần**\n\n💡 VD: T2-T4-T6 = [1,3,5]',
+        };
+      }
+
+      // Check availability first
+      const [hour] = args.time.split(':').map(Number);
+      const endHour = hour + args.duration;
+      const endTime = `${String(endHour).padStart(2, '0')}:00`;
+
+      const checkResult = await this.bookingsService.checkFixedScheduleAvailability(
+        {
+          courtId: args.courtId,
+          daysOfWeek: args.daysOfWeek,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          startTime: args.time,
+          endTime: endTime,
+        },
+        userId,
+      );
+
+      // If has conflicts, show them
+      if (!checkResult.success && checkResult.conflicts) {
+        return {
+          success: false,
+          hasConflicts: true,
+          message: `⚠️ **Có ${checkResult.conflicts.length} ngày bị trùng lịch:**\n\n${checkResult.conflicts.slice(0, 5).map((c: any) => `• ${c.date} - ${c.reason}`).join('\n')}\n\n💡 Vui lòng chọn sân khác hoặc điều chỉnh thời gian.`,
+          conflicts: checkResult.conflicts,
+          suggestedActions: [
+            '🏸 Chọn sân khác',
+            '📅 Điều chỉnh thời gian',
+            '📋 Xem sân trống',
+          ],
+        };
+      }
+
+      // Confirmation step
+      if (!args.confirmed && checkResult.summary) {
+        const summary = checkResult.summary;
+        return {
+          success: false,
+          requiresConfirmation: true,
+          message: `📋 **Xác nhận đặt lịch cố định:**\n\n🏸 **Thông tin:**\n• Sân: Sân ${args.courtId}\n• Các ngày: ${args.daysOfWeek.map(d => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d]).join(', ')}\n• Thời gian: ${args.time} (${args.duration}h/buổi)\n• Từ: ${args.startDate}\n• Đến: ${args.endDate}\n\n💰 **Chi phí:**\n• Tổng số buổi: ${summary.totalSessions} buổi\n• Giá gốc: ${summary.originalPrice.toLocaleString('vi-VN')}đ\n• Giảm giá: ${summary.discountRate}% = -${summary.discountAmount.toLocaleString('vi-VN')}đ\n• **Thành tiền: ${summary.finalPrice.toLocaleString('vi-VN')}đ**\n\n✅ Bạn có chắc chắn muốn đặt lịch cố định này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận.`,
+          bookingInfo: args,
+          summary,
+        };
+      }
+
+      // Create fixed schedule booking
+      const [hour2] = args.time.split(':').map(Number);
+      const endHour2 = hour2 + args.duration;
+      const endTime2 = `${String(endHour2).padStart(2, '0')}:00`;
+
+      const result = await this.bookingsService.createFixedScheduleBooking(
+        {
+          courtId: args.courtId,
+          daysOfWeek: args.daysOfWeek,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          startTime: args.time,
+          endTime: endTime2,
+        },
+        userId,
+      );
+
+      const groupData = result.bookingGroup;
+      const summaryData = result.summary;
+
+      // Get group code from bookings
+      const firstBooking = await this.prisma.booking.findFirst({
+        where: { bookingGroupId: groupData.id },
+        select: { bookingCode: true },
+      });
+
+      return {
+        success: true,
+        message: `✅ **Đặt lịch cố định thành công!**\n\n📋 Mã nhóm: GROUP-${groupData.id}\n🏸 Sân: Sân ${args.courtId}\n📅 Tổng số buổi: ${summaryData.totalSessions} buổi\n💰 Tổng tiền: ${Number(groupData.finalPrice).toLocaleString('vi-VN')}đ (Giảm ${summaryData.discount})\n\n💡 Hệ thống đã tạo mã QR chung cho tất cả các buổi!`,
+        bookingGroup: {
+          groupId: groupData.id,
+          totalSessions: summaryData.totalSessions,
+          totalPrice: Number(groupData.finalPrice),
+          discount: summaryData.discount,
+        },
+        suggestedActions: [
+          '💰 Thanh toán ngay',
+          '📋 Xem tất cả lịch đặt',
+          '💵 Xem số dư ví',
+        ],
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error in create_fixed_schedule_booking: ${error.message}`);
+      return {
+        success: false,
+        error: `❌ **Không thể đặt lịch cố định**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại hoặc liên hệ hotline: **1900-8888**`,
+      };
+    }
+  }
+
+  /**
+   * 💰 payment - Thanh toán booking
+   * 🆕 PHASE 4: Payment with wallet or VNPay
+   */
+  private async handlePayment(
+    args: { bookingCode: string; paymentMethod: 'WALLET' | 'VNPAY'; confirmed?: boolean },
+    userId: number | null,
+  ): Promise<object> {
+    try {
+      this.logger.log(
+        `💰 [Function] payment: ${JSON.stringify(args)}, userId: ${userId}`,
+      );
+
+      // Validate login
+      if (!userId) {
+        return {
+          success: false,
+          error:
+            '🔒 **Bạn cần đăng nhập để thanh toán**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+        };
+      }
+
+      // Get booking
+      const booking = await this.prisma.booking.findFirst({
+        where: {
+          bookingCode: args.bookingCode,
+          userId,
+        },
+        include: {
+          court: { select: { name: true } },
+        },
+      });
+
+      if (!booking) {
+        return {
+          success: false,
+          error: `❌ **Không tìm thấy booking ${args.bookingCode}**\n\n💡 Vui lòng kiểm tra lại mã booking.`,
+        };
+      }
+
+      // Check if already paid
+      if (booking.paymentStatus === 'PAID') {
+        return {
+          success: true,
+          message: `✅ **Booking này đã được thanh toán!**\n\n📋 Mã: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ`,
+          suggestedActions: ['📋 Xem lịch đặt', '🏸 Đặt sân mới'],
+        };
+      }
+
+      // Step 1: Confirmation phase
+      if (!args.confirmed) {
+        return {
+          success: true,
+          message: `⚠️ **Xác nhận thanh toán:**\n\n📋 Mã booking: ${booking.bookingCode}\n🏸 Sân: ${booking.court?.name}\n📅 Ngày: ${new Date(booking.startTime).toLocaleDateString('vi-VN')}\n⏰ Giờ: ${new Date(booking.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(booking.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}\n💰 Số tiền: **${Number(booking.totalPrice).toLocaleString('vi-VN')}đ**\n💳 Phương thức: ${args.paymentMethod === 'WALLET' ? 'Ví điện tử' : 'VNPay'}\n\n❓ Xác nhận thanh toán?`,
+          booking: {
+            code: booking.bookingCode,
+            totalPrice: Number(booking.totalPrice),
+            paymentMethod: args.paymentMethod,
+          },
+          suggestedActions: ['Có, thanh toán', 'Không, hủy bỏ'],
+        };
+      }
+
+      // Step 2: Execute payment
+      if (args.paymentMethod === 'WALLET') {
+        // Pay with wallet
+        const result = await this.paymentsService.payWithWallet(booking.id, userId);
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: `❌ **Thanh toán thất bại**\n\n${result.message}\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.`,
+            suggestedActions: ['💳 Nạp tiền vào ví', '💰 Xem số dư ví'],
+          };
+        }
+
+        return {
+          success: true,
+          message: `✅ **Thanh toán thành công!**\n\n📋 Mã booking: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ\n💳 Phương thức: Ví điện tử\n\n📱 Bạn có thể dùng mã QR để check-in khi đến sân.`,
+          payment: {
+            bookingCode: booking.bookingCode,
+            amount: Number(booking.totalPrice),
+            method: 'WALLET',
+            status: 'PAID',
+          },
+          suggestedActions: ['📋 Xem lịch đặt', '🏸 Đặt sân mới', '💵 Xem ví'],
+        };
+      } else {
+        // VNPay payment
+        return {
+          success: true,
+          message: `💳 **Chuyển đến trang thanh toán VNPay...**\n\n📋 Mã booking: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ\n\n💡 Vui lòng hoàn tất thanh toán trên trang VNPay.`,
+          payment: {
+            bookingCode: booking.bookingCode,
+            amount: Number(booking.totalPrice),
+            method: 'VNPAY',
+            vnpayUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/${booking.id}`,
+          },
+          suggestedActions: ['💰 Thanh toán bằng ví', '📋 Xem lịch đặt'],
+        };
+      }
+    } catch (error) {
+      this.logger.error(`❌ Error in payment: ${error.message}`);
+      return {
+        success: false,
+        error: `❌ **Không thể thanh toán**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**`,
+      };
+    }
+  }
+
+  /**
+   * �🔄 Execute a function call from AI
    */
   private async executeFunction(
     functionCall: FunctionCall,
@@ -1035,6 +1578,22 @@ export class ChatService implements OnModuleInit {
 
       case 'get_user_bookings':
         result = await this.handleGetUserBookings(args as any, userId);
+        break;
+
+      case 'cancel_booking':
+        result = await this.handleCancelBooking(args as any, userId);
+        break;
+
+      case 'get_wallet_balance':
+        result = await this.handleGetWalletBalance(userId);
+        break;
+
+      case 'create_fixed_schedule_booking':
+        result = await this.handleCreateFixedScheduleBooking(args as any, userId);
+        break;
+
+      case 'payment':
+        result = await this.handlePayment(args as any, userId);
         break;
 
       default:
@@ -1735,4 +2294,107 @@ export class ChatService implements OnModuleInit {
     // Default
     return '👋 **SmartCourt AI - Trợ lý đặt sân thông minh**\n\n🎯 Tôi có thể giúp bạn:\n• 📅 **Đặt sân** cầu lông (cần đăng nhập)\n• 🏸 **Xem sân trống** theo ngày\n• 🛒 **Tra cứu sản phẩm** POS\n• 📋 **Xem lịch đặt** của bạn\n• 💰 **Xem bảng giá** sân\n\n💬 Hãy nói cho tôi biết bạn cần gì nhé! 🏸';
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🆕 PHASE 4: Chat History & Analytics
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * 💾 Save chat message to database
+   */
+  async saveChatMessage(
+    userId: number,
+    role: 'user' | 'bot',
+    content: string,
+    metadata?: any,
+  ): Promise<void> {
+    try {
+      await this.prisma.chatMessage.create({
+        data: {
+          userId,
+          role,
+          content,
+          metadata: metadata || {},
+        },
+      });
+      this.logger.log(`💾 Saved ${role} message for user ${userId}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to save chat message: ${error.message}`);
+    }
+  }
+
+  /**
+   * 📜 Get chat history for user
+   */
+  async getChatHistory(userId: number, limit: number = 50): Promise<any[]> {
+    try {
+      const messages = await this.prisma.chatMessage.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+
+      return messages
+        .reverse()
+        .map((msg) => ({
+          id: msg.id.toString(),
+          content: msg.content,
+          sender: msg.role,
+          timestamp: msg.createdAt,
+          suggestedActions: msg.metadata?.['suggestedActions'] || [],
+          bookingCard: msg.metadata?.['bookingCard'] || null,
+        }));
+    } catch (error) {
+      this.logger.error(`❌ Failed to get chat history: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * 📊 Track analytics for chat query
+   */
+  async trackChatAnalytics(
+    userId: number | null,
+    query: string,
+    intent: string | null,
+    wasResolved: boolean,
+    toolUsed: string | null,
+    responseTime: number,
+  ): Promise<void> {
+    try {
+      await this.prisma.chatAnalytics.create({
+        data: {
+          userId,
+          query,
+          intent,
+          wasResolved,
+          toolUsed,
+          responseTime,
+        },
+      });
+      this.logger.log(`📊 Tracked analytics: ${intent} - ${wasResolved ? 'resolved' : 'unresolved'}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to track analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * 🔍 Detect intent from user message
+   */
+  private detectIntent(message: string): string {
+    const lowerMsg = message.toLowerCase();
+
+    if (lowerMsg.match(/đặt|book|booking/)) return 'booking';
+    if (lowerMsg.match(/hủy|cancel|xóa/)) return 'cancel';
+    if (lowerMsg.match(/ví|số dư|balance|wallet/)) return 'wallet';
+    if (lowerMsg.match(/lịch|history|booking/)) return 'view_bookings';
+    if (lowerMsg.match(/sân trống|available|còn sân/)) return 'availability';
+    if (lowerMsg.match(/giá|price|bao nhiêu/)) return 'pricing';
+    if (lowerMsg.match(/nước|menu|sản phẩm|product/)) return 'products';
+    if (lowerMsg.match(/giờ|mở cửa|operating/)) return 'info';
+    if (lowerMsg.match(/địa chỉ|address|ở đâu/)) return 'contact';
+
+    return 'general';
+  }
 }
+ 

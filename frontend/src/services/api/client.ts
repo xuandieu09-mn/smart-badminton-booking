@@ -30,8 +30,15 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      // ✅ CHỈ redirect về login nếu KHÔNG phải đang ở trang login
+      const currentPath = window.location.pathname;
+      const isLoginPage = currentPath.includes('/login') || currentPath.includes('/auth');
+      
+      if (!isLoginPage) {
+        localStorage.removeItem('access_token');
+        window.location.href = '/login';
+      }
+      // ✅ Nếu đang ở login page → Để form xử lý lỗi, KHÔNG redirect
     }
     return Promise.reject(error);
   },

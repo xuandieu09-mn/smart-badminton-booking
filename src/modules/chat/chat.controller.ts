@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller, Post, Body, Req, Get, Query } from '@nestjs/common';
 import { Request } from 'express';
 import { ChatService } from './chat.service';
 import { ChatMessageDto } from './dto/chat.dto';
@@ -62,11 +62,35 @@ export class ChatController {
     console.log('🔑 Final userId being sent to ChatService:', userId);
 
     // Generate AI response với history từ frontend
+    const startTime = Date.now();
     const reply = await this.chatService.generateResponse(
       body.message,
       userId,
       body.history || [],
     );
+    const responseTime = Date.now() - startTime;
+
+    // Detect intent and track analytics
+    const intent = this.chatService['detectIntent'](body.message);
+    const wasResolved = !reply.includes('Xin lỗi') && !reply.includes('chưa hiểu');
+    
+    // Track analytics
+    if (userId) {
+      await this.chatService.trackChatAnalytics(
+        userId,
+        body.message,
+        intent,
+        wasResolved,
+        null, // toolUsed will be enhanced later
+        responseTime,
+      );
+    }
+
+    // Save chat history
+    if (userId) {
+      await this.chatService.saveChatMessage(userId, 'user', body.message);
+      await this.chatService.saveChatMessage(userId, 'bot', reply);
+    }
 
     return { reply };
   }
@@ -89,5 +113,44 @@ export class ChatController {
     }
 
     return null;
+  }
+
+  /**
+   * 📜 GET /chat/history - Get chat history for user
+   */
+  @Get('history')
+  async getChatHistory(
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+  ): Promise<{ messages: any[] }> {
+    let userId: number | null = null;
+
+    // Extract userId from request
+    if (req.user) {
+      const user = req.user as RequestUser;
+      userId = this.extractUserId(user);
+    } else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.substring(7);
+          const payload = this.jwtService.verify(token);
+          userId = payload.sub || payload.userId || null;
+        } catch (error) {
+          console.log('⚠️ Invalid JWT token');
+        }
+      }
+    }
+
+    if (!userId) {
+      return { messages: [] };
+    }
+
+    const messages = await this.chatService.getChatHistory(
+      userId,
+      limit ? parseInt(limit) : 50,
+    );
+
+    return { messages };
   }
 }
