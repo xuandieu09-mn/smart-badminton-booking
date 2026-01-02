@@ -25,6 +25,215 @@ import { Role, PaymentMethod, BookingType } from '@prisma/client';
 const OPERATING_HOURS = { start: 6, end: 21 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 🚫 OFF-TOPIC DETECTION - Keywords
+// ═══════════════════════════════════════════════════════════════════════════
+
+const OFF_TOPIC_KEYWORDS = [
+  // Nấu ăn
+  'nấu',
+  'món',
+  'công thức',
+  'ăn gì',
+  'làm bánh',
+  'nướng',
+  'chiên',
+  'hấp',
+  'phở',
+  'bún',
+  'cơm',
+  'mì',
+  'canh',
+  'soup',
+  'cooking',
+  'recipe',
+
+  // Lập trình
+  'code',
+  'lập trình',
+  'javascript',
+  'python',
+  'java',
+  'react',
+  'node',
+  'database',
+  'api',
+  'programming',
+  'function',
+  'debug',
+  'bug',
+  'git',
+
+  // Y tế
+  'bệnh',
+  'thuốc',
+  'khám',
+  'điều trị',
+  'bác sĩ',
+  'đau',
+  'sốt',
+  'cảm',
+  'viêm',
+  'doctor',
+  'medical',
+  'sick',
+  'disease',
+  'medicine',
+
+  // Chính trị
+  'chính trị',
+  'bầu cử',
+  'đảng',
+  'tổng thống',
+  'quốc hội',
+  'chính phủ',
+  'politics',
+  'election',
+  'president',
+  'government',
+
+  // Du lịch (không liên quan sân cầu lông)
+  'khách sạn',
+  'vé máy bay',
+  'tour',
+  'visa',
+  'hộ chiếu',
+  'resort',
+  'hotel',
+  'flight',
+  'ticket',
+  'tourism',
+
+  // Giải trí (phim, nhạc, game)
+  'phim',
+  'movie',
+  'concert',
+  'ca sĩ',
+  'game',
+  'chơi game',
+  'netflix',
+  'spotify',
+  'youtube',
+  'tiktok',
+
+  // Tài chính
+  'cổ phiếu',
+  'chứng khoán',
+  'forex',
+  'crypto',
+  'bitcoin',
+  'đầu tư',
+  'stock',
+  'investment',
+  'trading',
+
+  // Thời tiết (trừ khi liên quan đặt sân)
+  'bão',
+  'lũ lụt',
+  'động đất',
+  'thiên tai',
+  'typhoon',
+  'flood',
+  'earthquake',
+
+  // Giáo dục (không liên quan)
+  'thi đại học',
+  'học bổng',
+  'trường học',
+  'ôn thi',
+  'university',
+  'scholarship',
+  'exam',
+];
+
+const BADMINTON_KEYWORDS = [
+  // Sân cầu lông
+  'sân',
+  'court',
+  'cầu lông',
+  'badminton',
+  'cầu',
+  'vợt',
+
+  // Đặt chỗ
+  'đặt',
+  'book',
+  'booking',
+  'thuê',
+  'rent',
+  'lịch',
+  'schedule',
+  'hủy',
+  'cancel',
+  'xóa',
+  'delete',
+
+  // Giá cả
+  'giá',
+  'price',
+  'bao nhiêu',
+  'how much',
+  'cost',
+  'tiền',
+  'money',
+  'phí',
+  'fee',
+  'thanh toán',
+  'payment',
+  'ví',
+  'wallet',
+
+  // Thời gian hoạt động
+  'giờ',
+  'time',
+  'mở cửa',
+  'đóng cửa',
+  'open',
+  'close',
+  'hour',
+  'sáng',
+  'chiều',
+  'tối',
+  'morning',
+  'afternoon',
+  'evening',
+
+  // Dịch vụ
+  'nước',
+  'drink',
+  'đồ uống',
+  'beverage',
+  'cầu',
+  'shuttle',
+  'vợt',
+  'racket',
+  'giày',
+  'shoes',
+  'quần áo',
+  'phụ kiện',
+
+  // Địa chỉ, liên hệ
+  'địa chỉ',
+  'address',
+  'ở đâu',
+  'where',
+  'hotline',
+  'phone',
+  'liên hệ',
+  'contact',
+  'smartcourt',
+
+  // Chung
+  'có',
+  'còn',
+  'trống',
+  'available',
+  'free',
+  'xem',
+  'view',
+  'check',
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 🧠 SYSTEM INSTRUCTION V2 - Enhanced with Hardcoded Context
 // Phase 1: Củng cố "Bộ não" - Nạp kiến thức tĩnh trước khi dùng Function Calling
 // Last updated: 2025-12-22
@@ -322,15 +531,18 @@ const CANCEL_BOOKING: FunctionDeclaration = {
     properties: {
       bookingCode: {
         type: SchemaType.STRING,
-        description: 'Mã booking cần hủy (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
+        description:
+          'Mã booking cần hủy (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
       },
       reason: {
         type: SchemaType.STRING,
-        description: 'Lý do hủy (tùy chọn). VD: "Bận việc đột xuất", "Thời tiết xấu"',
+        description:
+          'Lý do hủy (tùy chọn). VD: "Bận việc đột xuất", "Thời tiết xấu"',
       },
       confirmed: {
         type: SchemaType.BOOLEAN,
-        description: '🆕 true khi khách đã xác nhận hủy sau khi được thông báo phí.',
+        description:
+          '🆕 true khi khách đã xác nhận hủy sau khi được thông báo phí.',
       },
     },
     required: ['bookingCode'],
@@ -357,7 +569,8 @@ const CREATE_FIXED_SCHEDULE_BOOKING: FunctionDeclaration = {
     properties: {
       daysOfWeek: {
         type: SchemaType.ARRAY,
-        description: 'Các ngày trong tuần (1=T2, 2=T3, ..., 7=CN). VD: [1,3,5] = T2-T4-T6',
+        description:
+          'Các ngày trong tuần (1=T2, 2=T3, ..., 7=CN). VD: [1,3,5] = T2-T4-T6',
         items: { type: SchemaType.NUMBER },
       },
       startDate: {
@@ -382,10 +595,18 @@ const CREATE_FIXED_SCHEDULE_BOOKING: FunctionDeclaration = {
       },
       confirmed: {
         type: SchemaType.BOOLEAN,
-        description: '🆕 true khi khách đã xác nhận sau khi xem tổng chi phí + giảm giá.',
+        description:
+          '🆕 true khi khách đã xác nhận sau khi xem tổng chi phí + giảm giá.',
       },
     },
-    required: ['daysOfWeek', 'startDate', 'endDate', 'courtId', 'time', 'duration'],
+    required: [
+      'daysOfWeek',
+      'startDate',
+      'endDate',
+      'courtId',
+      'time',
+      'duration',
+    ],
   },
 };
 
@@ -398,17 +619,20 @@ const PAYMENT: FunctionDeclaration = {
     properties: {
       bookingCode: {
         type: SchemaType.STRING,
-        description: 'Mã booking cần thanh toán (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
+        description:
+          'Mã booking cần thanh toán (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
       },
       paymentMethod: {
         type: SchemaType.STRING,
-        description: 'Phương thức thanh toán: "WALLET" (ví điện tử) hoặc "VNPAY" (chuyển khoản)',
+        description:
+          'Phương thức thanh toán: "WALLET" (ví điện tử) hoặc "VNPAY" (chuyển khoản)',
         format: 'enum',
         enum: ['WALLET', 'VNPAY'],
       },
       confirmed: {
         type: SchemaType.BOOLEAN,
-        description: '🆕 true khi khách đã xác nhận thanh toán sau khi xem số tiền.',
+        description:
+          '🆕 true khi khách đã xác nhận thanh toán sau khi xem số tiền.',
       },
     },
     required: ['bookingCode', 'paymentMethod'],
@@ -789,7 +1013,7 @@ export class ChatService implements OnModuleInit {
         // ❌ Nếu sân đã được đặt → Thông báo luôn, KHÔNG hỏi confirm
         if (existingBooking) {
           const bookedTime = `${new Date(existingBooking.startTime).getHours()}:${String(new Date(existingBooking.startTime).getMinutes()).padStart(2, '0')} - ${new Date(existingBooking.endTime).getHours()}:${String(new Date(existingBooking.endTime).getMinutes()).padStart(2, '0')}`;
-          
+
           return {
             success: false,
             error: `⚠️ **Sân ${args.courtId} đã được đặt!**\n\n❌ Khung giờ **${args.time} - ${endDateTime.getHours()}:${String(endDateTime.getMinutes()).padStart(2, '0')}** đã có người đặt (Booking: ${existingBooking.bookingCode}).\n\n💡 **Gợi ý:**\n• Chọn giờ khác (VD: sau ${bookedTime})\n• Chọn sân khác (Sân 1-5)\n• Hỏi "Còn sân nào trống hôm nay?" để xem lịch`,
@@ -1156,12 +1380,15 @@ export class ChatService implements OnModuleInit {
     userId: number | null,
   ): Promise<object> {
     try {
-      this.logger.log(`🚫 [Function] cancel_booking: ${JSON.stringify(args)}, userId: ${userId}`);
+      this.logger.log(
+        `🚫 [Function] cancel_booking: ${JSON.stringify(args)}, userId: ${userId}`,
+      );
 
       if (!userId) {
         return {
           success: false,
-          error: '🔒 **Bạn cần đăng nhập để hủy booking**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+          error:
+            '🔒 **Bạn cần đăng nhập để hủy booking**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
         };
       }
 
@@ -1191,8 +1418,9 @@ export class ChatService implements OnModuleInit {
       // Calculate refund policy
       const now = new Date();
       const startTime = new Date(booking.startTime);
-      const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-      
+      const hoursUntilStart =
+        (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
       let refundPercent = 0;
       if (hoursUntilStart >= 24) {
         refundPercent = 100;
@@ -1255,7 +1483,8 @@ export class ChatService implements OnModuleInit {
       if (!userId) {
         return {
           success: false,
-          error: '🔒 **Bạn cần đăng nhập để xem ví**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+          error:
+            '🔒 **Bạn cần đăng nhập để xem ví**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
         };
       }
 
@@ -1266,7 +1495,8 @@ export class ChatService implements OnModuleInit {
       if (!wallet) {
         return {
           success: false,
-          error: '❌ **Không tìm thấy ví điện tử**\n\n💡 Vui lòng liên hệ admin để kích hoạt ví.',
+          error:
+            '❌ **Không tìm thấy ví điện tử**\n\n💡 Vui lòng liên hệ admin để kích hoạt ví.',
         };
       }
 
@@ -1284,29 +1514,31 @@ export class ChatService implements OnModuleInit {
         message: `💰 **Thông tin ví của bạn:**\n\n💵 Số dư hiện tại: **${balance.toLocaleString('vi-VN')}đ**`,
         balance,
         balanceFormatted: `${balance.toLocaleString('vi-VN')}đ`,
-        recentTransactions: transactions.map(t => ({
+        recentTransactions: transactions.map((t) => ({
           type: t.type,
           amount: `${t.type === 'PAYMENT' ? '-' : '+'}${Number(t.amount).toLocaleString('vi-VN')}đ`,
           description: t.description,
           date: new Date(t.createdAt).toLocaleDateString('vi-VN'),
         })),
-        suggestedActions: balance < 100000 
-          ? [
-              '💳 Nạp tiền vào ví',
-              '🏸 Đặt sân (cần đủ tiền)',
-              '📅 Xem sân trống',
-            ]
-          : [
-              '🏸 Đặt sân ngay',
-              '📅 Xem sân trống hôm nay',
-              '🥤 Xem menu đồ uống',
-            ],
+        suggestedActions:
+          balance < 100000
+            ? [
+                '💳 Nạp tiền vào ví',
+                '🏸 Đặt sân (cần đủ tiền)',
+                '📅 Xem sân trống',
+              ]
+            : [
+                '🏸 Đặt sân ngay',
+                '📅 Xem sân trống hôm nay',
+                '🥤 Xem menu đồ uống',
+              ],
       };
     } catch (error) {
       this.logger.error(`❌ Error in get_wallet_balance: ${error.message}`);
       return {
         success: false,
-        error: '❌ **Không thể tra cứu ví**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
+        error:
+          '❌ **Không thể tra cứu ví**\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**',
       };
     }
   }
@@ -1328,12 +1560,15 @@ export class ChatService implements OnModuleInit {
     userId: number | null,
   ): Promise<object> {
     try {
-      this.logger.log(`📅 [Function] create_fixed_schedule_booking: ${JSON.stringify(args)}, userId: ${userId}`);
+      this.logger.log(
+        `📅 [Function] create_fixed_schedule_booking: ${JSON.stringify(args)}, userId: ${userId}`,
+      );
 
       if (!userId) {
         return {
           success: false,
-          error: '🔒 **Bạn cần đăng nhập để đặt lịch cố định**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
+          error:
+            '🔒 **Bạn cần đăng nhập để đặt lịch cố định**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
         };
       }
 
@@ -1341,7 +1576,8 @@ export class ChatService implements OnModuleInit {
       if (!args.daysOfWeek || args.daysOfWeek.length === 0) {
         return {
           success: false,
-          error: '❌ **Thiếu thông tin ngày trong tuần**\n\n💡 VD: T2-T4-T6 = [1,3,5]',
+          error:
+            '❌ **Thiếu thông tin ngày trong tuần**\n\n💡 VD: T2-T4-T6 = [1,3,5]',
         };
       }
 
@@ -1350,24 +1586,30 @@ export class ChatService implements OnModuleInit {
       const endHour = hour + args.duration;
       const endTime = `${String(endHour).padStart(2, '0')}:00`;
 
-      const checkResult = await this.bookingsService.checkFixedScheduleAvailability(
-        {
-          courtId: args.courtId,
-          daysOfWeek: args.daysOfWeek,
-          startDate: args.startDate,
-          endDate: args.endDate,
-          startTime: args.time,
-          endTime: endTime,
-        },
-        userId,
-      );
+      const checkResult =
+        await this.bookingsService.checkFixedScheduleAvailability(
+          {
+            courtId: args.courtId,
+            daysOfWeek: args.daysOfWeek,
+            startDate: args.startDate,
+            endDate: args.endDate,
+            startTime: args.time,
+            endTime: endTime,
+          },
+          userId,
+        );
 
       // If has conflicts, show them
       if (!checkResult.success && checkResult.conflicts) {
         return {
           success: false,
           hasConflicts: true,
-          message: `⚠️ **Có ${checkResult.conflicts.length} ngày bị trùng lịch:**\n\n${checkResult.conflicts.slice(0, 5).map((c: any) => `• ${c.date} - ${c.reason}`).join('\n')}\n\n💡 Vui lòng chọn sân khác hoặc điều chỉnh thời gian.`,
+          message: `⚠️ **Có ${checkResult.conflicts.length} ngày bị trùng lịch:**\n\n${checkResult.conflicts
+            .slice(0, 5)
+            .map((c: any) => `• ${c.date} - ${c.reason}`)
+            .join(
+              '\n',
+            )}\n\n💡 Vui lòng chọn sân khác hoặc điều chỉnh thời gian.`,
           conflicts: checkResult.conflicts,
           suggestedActions: [
             '🏸 Chọn sân khác',
@@ -1383,7 +1625,7 @@ export class ChatService implements OnModuleInit {
         return {
           success: false,
           requiresConfirmation: true,
-          message: `📋 **Xác nhận đặt lịch cố định:**\n\n🏸 **Thông tin:**\n• Sân: Sân ${args.courtId}\n• Các ngày: ${args.daysOfWeek.map(d => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d]).join(', ')}\n• Thời gian: ${args.time} (${args.duration}h/buổi)\n• Từ: ${args.startDate}\n• Đến: ${args.endDate}\n\n💰 **Chi phí:**\n• Tổng số buổi: ${summary.totalSessions} buổi\n• Giá gốc: ${summary.originalPrice.toLocaleString('vi-VN')}đ\n• Giảm giá: ${summary.discountRate}% = -${summary.discountAmount.toLocaleString('vi-VN')}đ\n• **Thành tiền: ${summary.finalPrice.toLocaleString('vi-VN')}đ**\n\n✅ Bạn có chắc chắn muốn đặt lịch cố định này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận.`,
+          message: `📋 **Xác nhận đặt lịch cố định:**\n\n🏸 **Thông tin:**\n• Sân: Sân ${args.courtId}\n• Các ngày: ${args.daysOfWeek.map((d) => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d]).join(', ')}\n• Thời gian: ${args.time} (${args.duration}h/buổi)\n• Từ: ${args.startDate}\n• Đến: ${args.endDate}\n\n💰 **Chi phí:**\n• Tổng số buổi: ${summary.totalSessions} buổi\n• Giá gốc: ${summary.originalPrice.toLocaleString('vi-VN')}đ\n• Giảm giá: ${summary.discountRate}% = -${summary.discountAmount.toLocaleString('vi-VN')}đ\n• **Thành tiền: ${summary.finalPrice.toLocaleString('vi-VN')}đ**\n\n✅ Bạn có chắc chắn muốn đặt lịch cố định này không?\n\n💡 Trả lời **"Có"** hoặc **"Đồng ý"** để xác nhận.`,
           bookingInfo: args,
           summary,
         };
@@ -1431,7 +1673,9 @@ export class ChatService implements OnModuleInit {
         ],
       };
     } catch (error) {
-      this.logger.error(`❌ Error in create_fixed_schedule_booking: ${error.message}`);
+      this.logger.error(
+        `❌ Error in create_fixed_schedule_booking: ${error.message}`,
+      );
       return {
         success: false,
         error: `❌ **Không thể đặt lịch cố định**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại hoặc liên hệ hotline: **1900-8888**`,
@@ -1444,7 +1688,11 @@ export class ChatService implements OnModuleInit {
    * 🆕 PHASE 4: Payment with wallet or VNPay
    */
   private async handlePayment(
-    args: { bookingCode: string; paymentMethod: 'WALLET' | 'VNPAY'; confirmed?: boolean },
+    args: {
+      bookingCode: string;
+      paymentMethod: 'WALLET' | 'VNPAY';
+      confirmed?: boolean;
+    },
     userId: number | null,
   ): Promise<object> {
     try {
@@ -1505,7 +1753,10 @@ export class ChatService implements OnModuleInit {
       // Step 2: Execute payment
       if (args.paymentMethod === 'WALLET') {
         // Pay with wallet
-        const result = await this.paymentsService.payWithWallet(booking.id, userId);
+        const result = await this.paymentsService.payWithWallet(
+          booking.id,
+          userId,
+        );
 
         if (!result.success) {
           return {
@@ -1589,7 +1840,10 @@ export class ChatService implements OnModuleInit {
         break;
 
       case 'create_fixed_schedule_booking':
-        result = await this.handleCreateFixedScheduleBooking(args as any, userId);
+        result = await this.handleCreateFixedScheduleBooking(
+          args as any,
+          userId,
+        );
         break;
 
       case 'payment':
@@ -1605,7 +1859,63 @@ export class ChatService implements OnModuleInit {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 💬 MAIN CHAT METHOD - với Function Calling Loop
+  // � OFF-TOPIC DETECTION METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Kiểm tra xem câu hỏi có liên quan đến đặt sân cầu lông không
+   * @param query Câu hỏi của user
+   * @returns true nếu liên quan, false nếu off-topic
+   */
+  private isRelevantToBadmintonBooking(query: string): boolean {
+    const lowerQuery = query.toLowerCase();
+
+    // Kiểm tra có chứa từ khóa badminton không
+    const hasBadmintonKeyword = BADMINTON_KEYWORDS.some((keyword) =>
+      lowerQuery.includes(keyword.toLowerCase()),
+    );
+
+    // Kiểm tra có chứa từ khóa off-topic không
+    const hasOffTopicKeyword = OFF_TOPIC_KEYWORDS.some((keyword) =>
+      lowerQuery.includes(keyword.toLowerCase()),
+    );
+
+    // Nếu có từ khóa off-topic VÀ KHÔNG có từ khóa badminton → OFF-TOPIC
+    if (hasOffTopicKeyword && !hasBadmintonKeyword) {
+      this.logger.log(`🚫 Off-topic detected: "${query}"`);
+      return false;
+    }
+
+    // Ngược lại → cho qua AI xử lý
+    return true;
+  }
+
+  /**
+   * Trả về response lịch sự khi phát hiện câu hỏi off-topic
+   */
+  private getOffTopicResponse(): string {
+    return `😊 **Xin lỗi bạn!**
+
+Mình là trợ lý AI chuyên về **đặt sân cầu lông** của SmartCourt, nên không thể hỗ trợ về chủ đề này ạ.
+
+🏸 **Mình có thể giúp bạn:**
+• 📅 Đặt sân cầu lông (1 lần hoặc lịch cố định)
+• 🔍 Kiểm tra sân trống theo ngày giờ
+• 💰 Xem giá sân & số dư ví điện tử
+• 📋 Xem lịch sử đặt sân của bạn
+• ❌ Hủy booking (có chính sách hoàn tiền)
+
+💡 **Bạn có thể thử hỏi:**
+- "Tối nay còn sân không?"
+- "Giá sân vào cuối tuần bao nhiêu?"
+- "Đặt sân 3 lúc 18h ngày mai"
+- "Xem lịch đặt của tôi"
+
+Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // �💬 MAIN CHAT METHOD - với Function Calling Loop
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
@@ -1620,6 +1930,14 @@ export class ChatService implements OnModuleInit {
     this.logger.log(
       `💬 User ${userId || 'anonymous'}: "${message}" (history: ${history?.length || 0} messages)`,
     );
+
+    // ✅ OFF-TOPIC DETECTION - Check BEFORE calling AI to save API costs
+    if (!this.isRelevantToBadmintonBooking(message)) {
+      this.logger.log('🚫 Off-topic query rejected');
+      // Track as off_topic intent in analytics
+      // TODO: Add analytics tracking here if needed
+      return this.getOffTopicResponse();
+    }
 
     // Fallback if AI not ready
     if (!this.isInitialized) {
@@ -2334,16 +2652,14 @@ export class ChatService implements OnModuleInit {
         take: limit,
       });
 
-      return messages
-        .reverse()
-        .map((msg) => ({
-          id: msg.id.toString(),
-          content: msg.content,
-          sender: msg.role,
-          timestamp: msg.createdAt,
-          suggestedActions: msg.metadata?.['suggestedActions'] || [],
-          bookingCard: msg.metadata?.['bookingCard'] || null,
-        }));
+      return messages.reverse().map((msg) => ({
+        id: msg.id.toString(),
+        content: msg.content,
+        sender: msg.role,
+        timestamp: msg.createdAt,
+        suggestedActions: msg.metadata?.['suggestedActions'] || [],
+        bookingCard: msg.metadata?.['bookingCard'] || null,
+      }));
     } catch (error) {
       this.logger.error(`❌ Failed to get chat history: ${error.message}`);
       return [];
@@ -2372,7 +2688,9 @@ export class ChatService implements OnModuleInit {
           responseTime,
         },
       });
-      this.logger.log(`📊 Tracked analytics: ${intent} - ${wasResolved ? 'resolved' : 'unresolved'}`);
+      this.logger.log(
+        `📊 Tracked analytics: ${intent} - ${wasResolved ? 'resolved' : 'unresolved'}`,
+      );
     } catch (error) {
       this.logger.error(`❌ Failed to track analytics: ${error.message}`);
     }
@@ -2397,4 +2715,3 @@ export class ChatService implements OnModuleInit {
     return 'general';
   }
 }
- 

@@ -125,7 +125,7 @@ export const LoginPage = () => {
             type="button"
             onClick={() => {
               setEmail('yunodarknight0000@gmail.com');
-              setPassword('password123');
+              setPassword('ben10dieu');
             }}
             className="px-3 py-2 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100 border border-green-200"
           >

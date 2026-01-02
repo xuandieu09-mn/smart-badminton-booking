@@ -1,97 +1,334 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import apiClient from '@/services/api/client';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+interface Summary {
+  totalRevenue: number;
+  totalBookings: number;
+  avgBookingValue: number;
+  conversionRate: number;
+}
+
+interface RevenueTrend {
+  date: string;
+  revenue: number;
+}
+
+interface CourtRevenue {
+  courtName: string;
+  revenue: number;
+  bookings: number;
+  avgPerBooking: number;
+}
+
+interface PeakHour {
+  hour: number;
+  revenue: number;
+  bookings: number;
+}
+
+interface ChatAnalytics {
+  intent: string;
+  count: number;
+}
 
 export const AdminReportsPage: React.FC = () => {
+  const [range, setRange] = useState('30d');
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([]);
+  const [courtRevenue, setCourtRevenue] = useState<CourtRevenue[]>([]);
+  const [peakHours, setPeakHours] = useState<PeakHour[]>([]);
+  const [chatAnalytics, setChatAnalytics] = useState<ChatAnalytics[]>([]);
+
+  useEffect(() => {
+    fetchData();
+  }, [range]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [summaryRes, revenueRes, courtRes, peakRes, chatRes] = await Promise.all([
+        apiClient.get(`/reports/summary?range=${range}`),
+        apiClient.get(`/reports/revenue?range=${range}`),
+        apiClient.get(`/reports/court-revenue?range=${range}`),
+        apiClient.get(`/reports/peak-hours?range=${range}`),
+        apiClient.get(`/reports/chat-analytics?range=${range}`),
+      ]);
+
+      setSummary(summaryRes.data);
+      setRevenueTrend(revenueRes.data);
+      setCourtRevenue(courtRes.data);
+      setPeakHours(peakRes.data);
+      setChatAnalytics(chatRes.data);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  // Chart data
+  const revenueChartData = {
+    labels: revenueTrend.map((d) => new Date(d.date).toLocaleDateString('vi-VN')),
+    datasets: [
+      {
+        label: 'Doanh thu',
+        data: revenueTrend.map((d) => d.revenue),
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const courtChartData = {
+    labels: courtRevenue.map((c) => c.courtName),
+    datasets: [
+      {
+        label: 'Doanh thu',
+        data: courtRevenue.map((c) => c.revenue),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(139, 92, 246, 0.8)',
+        ],
+      },
+    ],
+  };
+
+  const peakHoursChartData = {
+    labels: peakHours.map((h) => `${h.hour}:00`),
+    datasets: [
+      {
+        label: 'Số booking',
+        data: peakHours.map((h) => h.bookings),
+        backgroundColor: 'rgba(251, 191, 36, 0.8)',
+      },
+    ],
+  };
+
+  const chatChartData = {
+    labels: chatAnalytics.map((c) => c.intent),
+    datasets: [
+      {
+        data: chatAnalytics.map((c) => c.count),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(139, 92, 246, 0.8)',
+        ],
+      },
+    ],
+  };
+
+  const getMedalEmoji = (rank: number) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `${rank}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          Báo cáo & Thống kê
-        </h1>
-        <p className="text-gray-600">
-          Phân tích dữ liệu, heatmap, và báo cáo doanh thu
-        </p>
+    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+        <h1 className="text-3xl font-bold mb-2">📊 Báo cáo & Phân tích</h1>
+        <p className="text-blue-100">Thống kê doanh thu, biểu đồ và xu hướng kinh doanh</p>
       </div>
 
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <div className="flex items-start gap-3">
-          <div className="text-3xl">📈</div>
-          <div>
-            <h3 className="font-semibold text-red-900 mb-2">
-              Tính năng đang phát triển
-            </h3>
-            <p className="text-red-800 text-sm mb-3">Trang này sẽ hiển thị:</p>
-            <ul className="list-disc list-inside text-red-800 text-sm space-y-1">
-              <li>Heatmap khung giờ đặt nhiều nhất</li>
-              <li>Biểu đồ doanh thu theo tháng</li>
-              <li>Top 5 sân được đặt nhiều nhất</li>
-              <li>Tỷ lệ giữ chân khách hàng</li>
-              <li>Xuất báo cáo Excel/PDF</li>
-              <li>So sánh theo khoảng thời gian</li>
-            </ul>
-            <p className="text-red-700 text-xs mt-3">
-              📅 Dự kiến hoàn thành: Day 20 (Business Intelligence & Heatmap)
-            </p>
+      {/* Time Range Selector */}
+      <div className="flex gap-3">
+        {['7d', '30d', '90d'].map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            className={`px-6 py-2 rounded-lg font-medium transition-all ${
+              range === r
+                ? 'bg-blue-600 text-white shadow-lg scale-105'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            {r === '7d' ? '7 ngày' : r === '30d' ? '30 ngày' : '90 ngày'}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-blue-100 text-sm font-medium">Tổng doanh thu</span>
+            <span className="text-3xl">💰</span>
+          </div>
+          <div className="text-3xl font-bold">{formatCurrency(summary?.totalRevenue || 0)}</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-green-100 text-sm font-medium">Tổng booking</span>
+            <span className="text-3xl">📅</span>
+          </div>
+          <div className="text-3xl font-bold">{summary?.totalBookings || 0}</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-yellow-100 text-sm font-medium">Giá trị TB/booking</span>
+            <span className="text-3xl">💳</span>
+          </div>
+          <div className="text-3xl font-bold">{formatCurrency(summary?.avgBookingValue || 0)}</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-purple-100 text-sm font-medium">Tỷ lệ chuyển đổi</span>
+            <span className="text-3xl">📈</span>
+          </div>
+          <div className="text-3xl font-bold">{summary?.conversionRate.toFixed(1) || 0}%</div>
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Revenue Trend */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">📈 Xu hướng doanh thu</h3>
+          <Line
+            data={revenueChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: { display: false },
+              },
+            }}
+          />
+        </div>
+
+        {/* Court Revenue */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">🏸 Doanh thu theo sân</h3>
+          <Bar
+            data={courtChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: { display: false },
+              },
+            }}
+          />
+        </div>
+
+        {/* Peak Hours */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">⏰ Khung giờ cao điểm</h3>
+          <Bar
+            data={peakHoursChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: { display: false },
+              },
+            }}
+          />
+        </div>
+
+        {/* Chat Analytics */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">💬 Phân tích chat</h3>
+          <div className="flex justify-center">
+            <div className="w-64 h-64">
+              <Doughnut
+                data={chatChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: true,
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Report Preview */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">
-          📊 Preview: Analytics Dashboard
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Heatmap Preview */}
-          <div className="border rounded-lg p-4">
-            <h4 className="font-medium text-gray-700 mb-3">
-              🔥 Heatmap: Booking theo giờ
-            </h4>
-            <div className="space-y-2">
-              {['06:00', '09:00', '12:00', '15:00', '18:00', '21:00'].map(
-                (time) => (
-                  <div key={time} className="flex items-center gap-3">
-                    <span className="text-sm font-mono w-16">{time}</span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          time === '18:00'
-                            ? 'bg-red-500 w-full'
-                            : time === '15:00'
-                              ? 'bg-orange-500 w-4/5'
-                              : time === '09:00'
-                                ? 'bg-yellow-500 w-3/5'
-                                : 'bg-green-500 w-2/5'
-                        }`}
-                      />
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
-
-          {/* Revenue Chart Preview */}
-          <div className="border rounded-lg p-4">
-            <h4 className="font-medium text-gray-700 mb-3">
-              💰 Doanh thu 6 tháng
-            </h4>
-            <div className="space-y-2">
-              {['T7', 'T8', 'T9', 'T10', 'T11', 'T12'].map((month, idx) => (
-                <div key={month} className="flex items-center gap-3">
-                  <span className="text-sm font-medium w-8">{month}</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500"
-                      style={{ width: `${(idx + 1) * 15}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-600">
-                    {(idx + 1) * 10}M
-                  </span>
-                </div>
+      {/* Top Courts Table */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-lg font-bold text-gray-800 mb-4">🏆 Top sân doanh thu cao</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b-2 border-gray-200">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Xếp hạng</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên sân</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Doanh thu</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">Số booking</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-700">TB/booking</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courtRevenue.map((court, index) => (
+                <tr key={court.courtName} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4">
+                    <span className="text-2xl">{getMedalEmoji(index + 1)}</span>
+                  </td>
+                  <td className="py-3 px-4 font-medium text-gray-800">{court.courtName}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-blue-600">
+                    {formatCurrency(court.revenue)}
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-700">{court.bookings}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {formatCurrency(court.avgPerBooking)}
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

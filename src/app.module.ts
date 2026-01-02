@@ -16,6 +16,7 @@ import { CronModule } from './modules/cron/cron.module';
 import { PosModule } from './modules/pos/pos.module';
 import { RevenueModule } from './modules/revenue/revenue.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ChatModule } from './modules/chat/chat.module';
     PosModule, // ✅ POS System (Products & Sales)
     RevenueModule, // ✅ Revenue Tracking & Shift Closing
     ChatModule, // ✅ AI Chat Assistant (Gemini)
+    ReportsModule, // ✅ Admin Reports & Analytics
   ],
   controllers: [AppController],
   providers: [AppService],

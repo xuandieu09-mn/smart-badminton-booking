@@ -141,11 +141,17 @@ const AdminCourtsPage: React.FC = () => {
 
   const handleSaveCourt = async () => {
     try {
-      // Ensure pricePerHour is a valid number
-      const payload = {
-        ...courtForm,
+      // Ensure pricePerHour is a valid number and description is only sent if not empty
+      const payload: any = {
+        name: courtForm.name,
         pricePerHour: Number(courtForm.pricePerHour) || 0,
+        isActive: courtForm.isActive,
       };
+      
+      // Only include description if it's not empty
+      if (courtForm.description && courtForm.description.trim()) {
+        payload.description = courtForm.description;
+      }
       
       console.log('📤 Sending court payload:', payload);
       

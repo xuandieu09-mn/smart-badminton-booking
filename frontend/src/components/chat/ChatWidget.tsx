@@ -26,6 +26,52 @@ interface Message {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
+// Quick Actions Categories and Templates
+const QUICK_ACTIONS = {
+  check: {
+    icon: '🔍',
+    title: 'Kiểm tra sân',
+    actions: [
+      'Hôm nay còn sân không?',
+      'Sân nào đang trống?',
+      'Kiểm tra sân tối nay',
+      'Xem lịch sân tuần này'
+    ]
+  },
+  bookings: {
+    icon: '📅',
+    title: 'Lịch của tôi',
+    actions: [
+      'Tôi đã đặt sân gì?',
+      'Lịch sử đặt sân của tôi',
+      'Đơn đặt sân sắp tới',
+      'Hủy đơn đặt sân'
+    ]
+  },
+  wallet: {
+    icon: '💰',
+    title: 'Ví tiền',
+    actions: [
+      'Số dư ví của tôi?',
+      'Nạp tiền vào ví',
+      'Lịch sử giao dịch',
+      'Hoàn tiền như thế nào?'
+    ]
+  },
+  pricing: {
+    icon: '💵',
+    title: 'Bảng giá',
+    actions: [
+      'Giá sân bao nhiêu?',
+      'Khung giờ nào rẻ nhất?',
+      'Có chương trình khuyến mãi không?',
+      'Giá thuê theo tháng'
+    ]
+  }
+};
+
+type QuickActionCategory = keyof typeof QUICK_ACTIONS;
+
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -40,6 +86,8 @@ const ChatWidget: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<QuickActionCategory | null>(null);
+  const [showQuickActions, setShowQuickActions] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +263,85 @@ const ChatWidget: React.FC = () => {
     }
   };
 
+  // Handle quick action click - send message immediately
+  const handleQuickAction = (action: string) => {
+    setInputValue(action);
+    setActiveCategory(null);
+    // Send immediately
+    setTimeout(() => {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: action,
+        sender: 'user',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputValue('');
+      setIsLoading(true);
+
+      // Call API (same logic as sendMessage)
+      (async () => {
+        try {
+          const history = messages
+            .filter(m => m.id !== '1')
+            .map(m => ({
+              role: m.sender === 'user' ? 'user' : 'model',
+              parts: [{ text: m.content }],
+            }));
+
+          const response = await fetch(`${API_BASE_URL}/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ 
+              message: action,
+              history: history,
+            }),
+          });
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              throw new Error('Bạn cần đăng nhập để sử dụng chat');
+            }
+            throw new Error(`Lỗi server: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const botMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content: data.reply,
+            sender: 'bot',
+            timestamp: new Date(),
+            suggestedActions: data.suggestedActions,
+            bookingCard: data.bookingCard,
+          };
+
+          setMessages(prev => [...prev, botMessage]);
+          if (!isOpen) {
+            setHasNewMessage(true);
+          }
+        } catch (error) {
+          console.error('❌ Chat error:', error);
+          let errorText = 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau! 🙏';
+          if (error instanceof Error && error.message.includes('đăng nhập')) {
+            errorText = 'Bạn cần đăng nhập để sử dụng tính năng chat! 🔒';
+          }
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content: errorText,
+            sender: 'bot',
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        } finally {
+          setIsLoading(false);
+        }
+      })();
+    }, 0);
+  };
+
   // Quick suggestion buttons
   const suggestions = [
     'Giờ mở cửa?',
@@ -357,8 +484,100 @@ const ChatWidget: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Suggestions */}
-        {messages.length <= 2 && (
+        {/* Quick Actions Panel - Always visible above input */}
+        {showQuickActions && (
+          <div className="px-3 py-3 border-t border-slate-200 bg-gradient-to-b from-slate-50 to-white">
+            {/* Toggle Button */}
+            <button
+              onClick={() => setShowQuickActions(!showQuickActions)}
+              className="w-full flex items-center justify-between px-3 py-2 mb-2 text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                ⚡ Câu hỏi nhanh
+              </span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Categories View */}
+            {!activeCategory && (
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(QUICK_ACTIONS) as QuickActionCategory[]).map((key) => {
+                  const category = QUICK_ACTIONS[key];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setActiveCategory(key)}
+                      className="flex flex-col items-center justify-center gap-2 p-3 bg-white hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 border border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-200 hover:shadow-md group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform">{category.icon}</span>
+                      <span className="text-xs font-medium text-slate-700 group-hover:text-blue-600 text-center">
+                        {category.title}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Actions View */}
+            {activeCategory && (
+              <div className="space-y-2">
+                {/* Back Button */}
+                <button
+                  onClick={() => setActiveCategory(null)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Quay lại
+                </button>
+
+                {/* Category Title */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                  <span className="text-xl">{QUICK_ACTIONS[activeCategory].icon}</span>
+                  <span className="text-sm font-semibold text-blue-700">
+                    {QUICK_ACTIONS[activeCategory].title}
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-1.5">
+                  {QUICK_ACTIONS[activeCategory].actions.map((action, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleQuickAction(action)}
+                      disabled={isLoading}
+                      className="w-full text-left px-3 py-2.5 text-sm bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 text-slate-700 hover:text-blue-600 rounded-lg border border-slate-200 hover:border-blue-300 transition-all duration-200 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Collapsed Quick Actions Toggle */}
+        {!showQuickActions && (
+          <div className="px-3 py-2 border-t border-slate-200 bg-white">
+            <button
+              onClick={() => setShowQuickActions(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+              Hiện câu hỏi nhanh
+            </button>
+          </div>
+        )}
+
+        {/* Quick Suggestions - Only show for new users */}
+        {messages.length <= 2 && false && (
           <div className="px-4 py-2 border-t border-slate-100 bg-slate-50/50">
             <p className="text-xs text-slate-500 mb-2">Gợi ý câu hỏi:</p>
             <div className="flex flex-wrap gap-2">
