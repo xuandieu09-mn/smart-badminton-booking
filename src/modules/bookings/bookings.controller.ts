@@ -185,14 +185,17 @@ export class BookingsController {
    * ❌ Cancel booking (Customer/Staff/Admin)
    * - Customer can cancel their own bookings
    * - Staff/Admin can cancel any booking
+   * - Requires confirmation if booking is already paid
    */
   @Post(':id/cancel')
   async cancelBooking(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: JwtUser,
+    @Body() body?: { confirmCancellation?: boolean },
   ) {
     const userId = user.role === Role.CUSTOMER ? user.id : undefined;
-    return this.bookingsService.cancelBooking(id, userId);
+    const confirmCancellation = body?.confirmCancellation || false;
+    return this.bookingsService.cancelBooking(id, userId, confirmCancellation);
   }
 
   /**

@@ -2,11 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from '@/services/api/client';
-import { format, differenceInSeconds } from 'date-fns';
+import { format, differenceInSeconds, differenceInHours } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import PaymentMethodModal, {
   PaymentGateway,
 } from '../../payment/components/PaymentMethodModal';
+import CancellationConfirmModal from '../components/CancellationConfirmModal';
 import {
   processPayment,
   CreatePaymentUrlResponse,
@@ -35,6 +36,7 @@ interface Booking {
   startTime: string;
   endTime: string;
   totalPrice: number;
+  paidAmount: number;
   status: BookingStatus;
   paymentStatus: 'PAID' | 'UNPAID';
   expiresAt: string | null;
@@ -138,6 +140,11 @@ export const MyBookingsPage: React.FC = () => {
     useState<Booking | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const [realtimeMessage, setRealtimeMessage] = useState('');
+
+  // Cancellation modal state
+  const [cancellationModalOpen, setCancellationModalOpen] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -287,15 +294,35 @@ export const MyBookingsPage: React.FC = () => {
 
   // Cancel booking mutation
   const { mutate: cancelBooking, isPending: isCancelling } = useMutation({
-    mutationFn: async (bookingId: number) => {
-      return apiClient.post(`/bookings/${bookingId}/cancel`);
+    mutationFn: async ({
+      bookingId,
+      confirmCancellation,
+    }: {
+      bookingId: number;
+      confirmCancellation: boolean;
+    }) => {
+      return apiClient.post(`/bookings/${bookingId}/cancel`, {
+        confirmCancellation,
+      });
     },
     onSuccess: () => {
       alert('✅ Đã hủy booking!');
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      setCancellationModalOpen(false);
+      setBookingToCancel(null);
     },
     onError: (error: any) => {
-      alert(`❌ Lỗi: ${error.response?.data?.message || error.message}`);
+      const errorMsg = error.response?.data?.message || error.message;
+      
+      // Nếu lỗi yêu cầu xác nhận, hiển thị modal
+      if (errorMsg.includes('CONFIRMATION_REQUIRED')) {
+        // Modal đã mở rồi, không làm gì
+        return;
+      }
+      
+      alert(`❌ Lỗi: ${errorMsg}`);
+      setCancellationModalOpen(false);
+      setBookingToCancel(null);
     },
   });
 
@@ -336,6 +363,50 @@ export const MyBookingsPage: React.FC = () => {
   const handlePayNow = (booking: Booking) => {
     setSelectedBookingForPayment(booking);
     setPaymentModalOpen(true);
+  };
+
+  // Calculate estimated refund for a booking
+  const calculateEstimatedRefund = (booking: Booking) => {
+    const now = new Date();
+    const bookingStart = new Date(booking.startTime);
+    const hoursUntilBooking = differenceInHours(bookingStart, now);
+
+    let percentage = 0;
+    if (hoursUntilBooking > 24) {
+      percentage = 100;
+    } else if (hoursUntilBooking > 12) {
+      percentage = 50;
+    } else {
+      percentage = 0;
+    }
+
+    const amount = (booking.paidAmount * percentage) / 100;
+
+    return { percentage, amount };
+  };
+
+  // Handle cancel button click
+  const handleCancelClick = (booking: Booking) => {
+    // Nếu chưa thanh toán (PENDING_PAYMENT), hủy luôn không cần confirm
+    if (booking.status === 'PENDING_PAYMENT') {
+      if (confirm('Bạn có chắc muốn hủy booking này?')) {
+        cancelBooking({ bookingId: booking.id, confirmCancellation: false });
+      }
+      return;
+    }
+
+    // Nếu đã thanh toán (CONFIRMED), hiển thị modal xác nhận
+    if (booking.status === 'CONFIRMED') {
+      setBookingToCancel(booking);
+      setCancellationModalOpen(true);
+      return;
+    }
+  };
+
+  // Confirm cancellation from modal
+  const handleConfirmCancellation = () => {
+    if (!bookingToCancel) return;
+    cancelBooking({ bookingId: bookingToCancel.id, confirmCancellation: true });
   };
 
   const handlePaymentMethodSelected = (gateway: PaymentGateway) => {
@@ -606,11 +677,7 @@ export const MyBookingsPage: React.FC = () => {
 
                       {canCancel && (
                         <button
-                          onClick={() => {
-                            if (confirm('Bạn có chắc muốn hủy booking này?')) {
-                              cancelBooking(booking.id);
-                            }
-                          }}
+                          onClick={() => handleCancelClick(booking)}
                           disabled={isCancelling}
                           className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 disabled:opacity-50 transition"
                         >
@@ -690,6 +757,22 @@ export const MyBookingsPage: React.FC = () => {
             walletBalance={walletBalance}
             bookingAmount={selectedBookingForPayment.totalPrice}
             isProcessing={isPaying}
+          />
+        )}
+
+        {/* Cancellation Confirmation Modal */}
+        {bookingToCancel && (
+          <CancellationConfirmModal
+            isOpen={cancellationModalOpen}
+            onClose={() => {
+              setCancellationModalOpen(false);
+              setBookingToCancel(null);
+            }}
+            onConfirm={handleConfirmCancellation}
+            bookingCode={bookingToCancel.bookingCode}
+            bookingTime={new Date(bookingToCancel.startTime)}
+            paidAmount={bookingToCancel.paidAmount}
+            estimatedRefund={calculateEstimatedRefund(bookingToCancel)}
           />
         )}
       </div>

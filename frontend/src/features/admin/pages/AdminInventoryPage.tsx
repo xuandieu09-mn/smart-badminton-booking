@@ -96,6 +96,7 @@ const AdminInventoryPage: React.FC = () => {
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [showDamageModal, setShowDamageModal] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Form states
@@ -103,6 +104,13 @@ const AdminInventoryPage: React.FC = () => {
   const [newPrice, setNewPrice] = useState('');
   const [damageQty, setDamageQty] = useState('');
   const [damageReason, setDamageReason] = useState('');
+  
+  // Add Product Form
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductCategory, setNewProductCategory] = useState('SHUTTLECOCK');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductStock, setNewProductStock] = useState('');
+  const [newProductDescription, setNewProductDescription] = useState('');
 
   // Filters
   const [historyFilter, setHistoryFilter] = useState<string>('');
@@ -207,6 +215,35 @@ const AdminInventoryPage: React.FC = () => {
     },
   });
 
+  const addProductMutation = useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      category: string;
+      price: number;
+      stock: number;
+      description?: string;
+    }) => {
+      const { data } = await API.post('/pos/products', payload, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setShowAddProductModal(false);
+      setNewProductName('');
+      setNewProductCategory('SHUTTLECOCK');
+      setNewProductPrice('');
+      setNewProductStock('');
+      setNewProductDescription('');
+      alert('✅ Thêm sản phẩm mới thành công!');
+    },
+    onError: (error: any) => {
+      alert(`❌ Lỗi: ${error.response?.data?.message || error.message}`);
+    },
+  });
+
   // ==================== HANDLERS ====================
   const handleRestock = (product: Product) => {
     setSelectedProduct(product);
@@ -246,6 +283,20 @@ const AdminInventoryPage: React.FC = () => {
       productId: selectedProduct.id,
       quantity: parseInt(damageQty),
       reason: damageReason,
+    });
+  };
+
+  const submitAddProduct = () => {
+    if (!newProductName || !newProductPrice || !newProductStock) {
+      alert('⚠️ Vui lòng điền đầy đủ thông tin!');
+      return;
+    }
+    addProductMutation.mutate({
+      name: newProductName,
+      category: newProductCategory,
+      price: parseFloat(newProductPrice),
+      stock: parseInt(newProductStock),
+      description: newProductDescription || undefined,
     });
   };
 
@@ -331,6 +382,17 @@ const AdminInventoryPage: React.FC = () => {
             {/* OVERVIEW TAB */}
             {activeTab === 'overview' && (
               <div>
+                {/* Add Product Button */}
+                <div className="mb-4 flex justify-end">
+                  <button
+                    onClick={() => setShowAddProductModal(true)}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <span className="text-xl">➕</span>
+                    Thêm sản phẩm mới
+                  </button>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -730,6 +792,127 @@ const AdminInventoryPage: React.FC = () => {
                 onClick={() => {
                   setShowDamageModal(false);
                   setDamageQty('');
+
+      {/* Add Product Modal */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <span className="text-3xl">➕</span>
+              Thêm sản phẩm mới
+            </h3>
+
+            <div className="space-y-4">
+              {/* Product Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tên sản phẩm <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="VD: Cầu Yonex AS30"
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Danh mục <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newProductCategory}
+                  onChange={(e) => setNewProductCategory(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="SHUTTLECOCK">🏸 Ống cầu</option>
+                  <option value="BEVERAGE">🥤 Nước uống</option>
+                  <option value="ACCESSORY">🎾 Phụ kiện</option>
+                  <option value="EQUIPMENT">⚡ Dụng cụ</option>
+                  <option value="OTHER">📦 Khác</option>
+                </select>
+              </div>
+
+              {/* Price & Stock */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Giá (VNĐ) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={newProductPrice}
+                    onChange={(e) => setNewProductPrice(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="50000"
+                    min="0"
+                    step="1000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Số lượng <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={newProductStock}
+                    onChange={(e) => setNewProductStock(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="100"
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mô tả (tùy chọn)
+                </label>
+                <textarea
+                  value={newProductDescription}
+                  onChange={(e) => setNewProductDescription(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Mô tả chi tiết về sản phẩm..."
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={submitAddProduct}
+                disabled={
+                  !newProductName ||
+                  !newProductPrice ||
+                  !newProductStock ||
+                  addProductMutation.isPending
+                }
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addProductMutation.isPending ? '⏳ Đang thêm...' : '✅ Thêm sản phẩm'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddProductModal(false);
+                  setNewProductName('');
+                  setNewProductCategory('SHUTTLECOCK');
+                  setNewProductPrice('');
+                  setNewProductStock('');
+                  setNewProductDescription('');
+                }}
+                disabled={addProductMutation.isPending}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50"
+              >
+                ❌ Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
                   setDamageReason('');
                   setSelectedProduct(null);
                 }}

@@ -423,6 +423,43 @@ Cung cấp trải nghiệm tư vấn đặt sân XUẤT SẮC, giúp khách hàn
 được sân phù hợp, hiểu rõ giá cả, chính sách, và hoàn tất booking một cách dễ dàng.
 
 Luôn thân thiện, chính xác, và hướng khách về hành động tiếp theo! 🚀
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🧠 CONTEXT AWARENESS - XỬ LÝ HỘI THOẠI LIÊN TỤC (CRITICAL):
+
+**1. Temporal Expressions - Phải resolve với ngày hiện tại:**
+- "hôm nay" → Dùng ngày từ [CONTEXT]
+- "ngày mai" → Ngày hôm nay + 1 
+- "ngày mốt" / "ngày kia" → Ngày hôm nay + 2
+- "tuần sau" → Cộng thêm 7 ngày
+- "cuối tuần" → Thứ 7 hoặc Chủ nhật tuần này
+
+**2. Affirmative Responses - Khi user xác nhận:**
+Nếu bot vừa hỏi câu hỏi YES/NO (VD: "Bạn muốn đặt sân không?"):
+- User trả lời: "Có" / "Được" / "OK" / "Ừ" / "Đồng ý" / "Yes" / "Xác nhận"
+  → TIẾP TỤC action đang pending (VD: trigger create_booking với confirmed=true)
+- KHÔNG quay về greeting message!
+
+**3. Negative Responses:**
+- "Không" / "Thôi" / "No" / "Hủy" / "Cancel" 
+  → Hủy action hiện tại, hỏi "Bạn cần gì khác không?"
+
+**4. Vague Questions - Phải xem conversation history:**
+- "Còn sân 2 thì sao?" → Lấy time/date từ previous query
+- "Cùng giờ ngày mai?" → Reference time từ câu trước
+- "Giá bao nhiêu?" → Reference court/time từ context
+- "Ngày mốt thì sao?" → Tiếp tục topic từ câu trước
+
+**5. Follow-up Action Rules:**
+- Nếu vừa show court availability → User confirm → Trigger booking flow
+- Nếu đang trong booking flow → Thu thập: courtId, startTime, endTime
+- KHÔNG bao giờ quay về greeting khi có active conversation context
+- Nếu thiếu thông tin → Hỏi rõ thay vì reset conversation
+
+**6. Anti-Greeting Loop:**
+- KHÔNG trả lời "Xin chào! Tôi là SmartCourt AI..." nếu đã có history
+- Nếu user message mơ hồ → Clarification question, KHÔNG greeting
 `.trim();
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -669,6 +706,7 @@ function convertToGroqTools() {
     CANCEL_BOOKING,
     GET_WALLET_BALANCE,
     CREATE_FIXED_SCHEDULE_BOOKING,
+    PAYMENT,
   ]) {
     tools.push({
       type: 'function',
@@ -1891,6 +1929,27 @@ export class ChatService implements OnModuleInit {
   }
 
   /**
+   * 🆕 Detect if response is a generic greeting (to prevent greeting loop)
+   */
+  private isGenericGreeting(response: string): boolean {
+    const lowerResponse = response.toLowerCase();
+    const greetingPatterns = [
+      'xin chào',
+      'chào bạn',
+      'tôi là smartcourt',
+      'trợ lý ai',
+      'tôi có thể giúp bạn',
+      'bạn cần gì',
+      'hello',
+      'hi there',
+    ];
+
+    // Check if response contains greeting pattern AND is relatively short (< 200 chars)
+    return greetingPatterns.some(pattern => lowerResponse.includes(pattern)) 
+      && response.length < 300;
+  }
+
+  /**
    * Trả về response lịch sự khi phát hiện câu hỏi off-topic
    */
   private getOffTopicResponse(): string {
@@ -1979,8 +2038,51 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
     }
 
     try {
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Enhanced system instruction for Groq with strict JSON tool calling + Context Awareness
+      const groqSystemInstruction = `${SYSTEM_INSTRUCTION}
+
+📌 CRITICAL TOOL CALLING RULES:
+- ALWAYS use tools when user asks about: court availability, booking, wallet, products
+- Use ONLY valid JSON for tool arguments, NO XML syntax
+- Example tool calls:
+  * "Hôm nay còn sân không?" → CALL get_court_availability({"date": "${currentDate}"})
+  * "Số dư ví?" → CALL get_wallet_balance({})
+  * "Giá sân?" → CALL get_court_availability({"date": "${currentDate}"})
+  * "Menu đồ uống?" → CALL get_pos_products({"category": "DRINK"})
+
+🧠 CONTEXT AWARENESS RULES (CRITICAL):
+1. **Temporal Expressions** - PHẢI resolve với ngày hiện tại:
+   - "hôm nay" = ${currentDate}
+   - "ngày mai" = ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+   - "ngày mốt" / "ngày kia" = ${new Date(Date.now() + 172800000).toISOString().split('T')[0]}
+   - "tuần sau" = ${new Date(Date.now() + 604800000).toISOString().split('T')[0]}
+   - "cuối tuần" = Saturday or Sunday này
+
+2. **Affirmative Responses** - Khi user trả lời xác nhận:
+   - "Có" / "Được" / "OK" / "Ừ" / "Đồng ý" / "Yes" → Tiếp tục action từ context
+   - VD: Bot hỏi "Bạn muốn đặt sân không?" → User: "Có" → PHẢI trigger create_booking
+   
+3. **Negative Responses**:
+   - "Không" / "Thôi" / "No" / "Cancel" → Hủy action, hỏi "Bạn cần gì khác?"
+
+4. **Vague Questions** - PHẢI xem conversation history:
+   - "Còn sân 2 thì sao?" → Lấy context từ câu trước (time, date)
+   - "Cùng giờ ngày mai?" → Reference time từ previous message
+   - "Giá bao nhiêu?" → Reference court/time từ context
+
+5. **Follow-up Actions**:
+   - Nếu vừa show court availability VÀ user confirm → Trigger booking flow
+   - Nếu đang trong booking flow → Thu thập đủ: courtId, startTime, endTime
+   - KHÔNG quay về greeting khi có active context
+
+⚠️ If user is NOT logged in and asks about wallet/bookings, respond: "🔒 Bạn cần đăng nhập để sử dụng tính năng này."
+
+🚫 NEVER return greeting message if conversation has context. Always continue from previous topic.`;
+
       // Convert history to Groq format
-      const messages: any[] = [{ role: 'system', content: SYSTEM_INSTRUCTION }];
+      const messages: any[] = [{ role: 'system', content: groqSystemInstruction }];
 
       // Add history if provided
       if (history && history.length > 0) {
@@ -1996,6 +2098,8 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
       messages.push({ role: 'user', content: message });
 
       // Call Groq with function calling
+      this.logger.log(`🔧 Tools available: ${this.getGroqTools().length}`);
+      
       const response = await this.groqClient.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages,
@@ -2006,6 +2110,7 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
       });
 
       const choice = response.choices[0];
+      this.logger.log(`🤖 Response type: ${choice.message.tool_calls ? 'with tool calls' : 'text only'}`);
 
       // Check if function calls are needed
       if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
@@ -2014,7 +2119,14 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 
         for (const toolCall of choice.message.tool_calls) {
           const functionName = toolCall.function.name;
-          const functionArgs = JSON.parse(toolCall.function.arguments);
+          let functionArgs: any;
+          
+          try {
+            functionArgs = JSON.parse(toolCall.function.arguments);
+          } catch (parseError) {
+            this.logger.error(`❌ Failed to parse tool arguments: ${toolCall.function.arguments}`);
+            continue;
+          }
 
           this.logger.log(`🔧 Executing function: ${functionName}`);
           this.logger.log(`📦 Args: ${JSON.stringify(functionArgs)}`);
@@ -2052,9 +2164,34 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 
       // No function calls, return text directly
       this.logger.log('🤖 AI Response (no function calls)');
-      return choice.message.content || this.getFallbackResponse(message);
+      const textResponse = choice.message.content;
+      
+      // If response is empty or just greeting, check if should use fallback
+      if (!textResponse || textResponse.trim().length === 0) {
+        this.logger.warn('⚠️ Empty response from Groq, using fallback');
+        return this.getFallbackResponse(message);
+      }
+      
+      // 🆕 ANTI-GREETING LOOP: If history exists and response is generic greeting, retry with emphasis
+      if (history && history.length > 0 && this.isGenericGreeting(textResponse)) {
+        this.logger.warn('⚠️ Detected greeting loop with existing history, requesting clarification');
+        return 'Xin lỗi, tôi chưa hiểu rõ ý bạn. Bạn có thể nói rõ hơn được không? 🤔\n\nVí dụ: "Đặt sân 3 lúc 18h ngày mai" hoặc "Kiểm tra sân trống hôm nay"';
+      }
+      
+      return textResponse;
     } catch (error) {
-      this.logger.error(`❌ Groq error: ${error.message}`);
+      this.logger.error(`❌ Groq error: ${error.status} ${JSON.stringify(error.error || error.message)}`);
+      
+      // Log detailed error for debugging
+      if (error.error) {
+        this.logger.error(`Error details: ${JSON.stringify(error.error, null, 2)}`);
+      }
+      
+      // If tool_use_failed, provide specific guidance
+      if (error.error?.code === 'tool_use_failed') {
+        this.logger.error('⚠️ Tool validation failed. Check tool definitions and arguments format.');
+      }
+      
       return this.getFallbackResponse(message);
     }
   }
@@ -2103,6 +2240,13 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
           if (!functionCalls || functionCalls.length === 0) {
             const text = response.text();
             this.logger.log(`🤖 AI Response (iter ${iteration + 1})`);
+            
+            // 🆕 ANTI-GREETING LOOP: If history exists and response is generic greeting, return clarification
+            if (text && history && history.length > 0 && this.isGenericGreeting(text)) {
+              this.logger.warn('⚠️ Detected greeting loop with existing history (Gemini), requesting clarification');
+              return 'Xin lỗi, tôi chưa hiểu rõ ý bạn. Bạn có thể nói rõ hơn được không? 🤔\n\nVí dụ: "Đặt sân 3 lúc 18h ngày mai" hoặc "Kiểm tra sân trống hôm nay"';
+            }
+            
             return text || this.getFallbackResponse(message);
           }
 

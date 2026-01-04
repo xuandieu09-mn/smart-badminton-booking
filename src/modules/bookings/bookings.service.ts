@@ -1035,6 +1035,7 @@ export class BookingsService {
   async cancelBooking(
     bookingId: number,
     userId?: number,
+    confirmCancellation: boolean = false,
   ): Promise<{ message: string; booking: any }> {
     // Get booking
     const booking = await this.prisma.booking.findUnique({
@@ -1058,6 +1059,13 @@ export class BookingsService {
     if (!['PENDING_PAYMENT', 'CONFIRMED'].includes(booking.status)) {
       throw new BadRequestException(
         `Cannot cancel booking with status: ${booking.status}`,
+      );
+    }
+
+    // ✅ REQUIRE CONFIRMATION: If booking is CONFIRMED (already paid), customer must confirm cancellation terms
+    if (booking.status === BookingStatus.CONFIRMED && userId && !confirmCancellation) {
+      throw new BadRequestException(
+        'CONFIRMATION_REQUIRED: Vui lòng xác nhận điều khoản hủy booking đã thanh toán',
       );
     }
 
@@ -1258,27 +1266,30 @@ export class BookingsService {
       bookingCode: booking.bookingCode,
     });
 
-    // �🔔 Notify staff & admin about cancellation
-    try {
-      // Get updated wallet balance after refund
-      let walletBalance = 0;
-      if (booking.userId) {
-        const wallet = await this.prisma.wallet.findUnique({
-          where: { userId: booking.userId },
-        });
-        walletBalance = wallet ? Number(wallet.balance) : 0;
-      }
+    // 🔔 Notify staff & admin about cancellation (ONLY for paid bookings)
+    // ✅ SKIP NOTIFICATION: If booking was PENDING_PAYMENT, no need to notify
+    if (booking.status === BookingStatus.CONFIRMED) {
+      try {
+        // Get updated wallet balance after refund
+        let walletBalance = 0;
+        if (booking.userId) {
+          const wallet = await this.prisma.wallet.findUnique({
+            where: { userId: booking.userId },
+          });
+          walletBalance = wallet ? Number(wallet.balance) : 0;
+        }
 
-      // Send cancellation notification with refund info
-      await this.notificationsService.notifyBookingCancelled(booking, {
-        refundAmount: Number(refundAmount),
-        refundPercentage,
-        walletBalance,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to send cancellation notification: ${error.message}`,
-      );
+        // Send cancellation notification with refund info
+        await this.notificationsService.notifyBookingCancelled(booking, {
+          refundAmount: Number(refundAmount),
+          refundPercentage,
+          walletBalance,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to send cancellation notification: ${error.message}`,
+        );
+      }
     }
 
     return {
