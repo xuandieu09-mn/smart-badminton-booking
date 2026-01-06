@@ -1,40 +1,45 @@
-/* Timeline Resource Grid Styles */
+/* Timeline Resource Grid Styles - FIXED STICKY SCROLLING */
 
 .timeline-resource-grid-container {
   width: 100%;
-  overflow: hidden;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   background: white;
 }
 
-/* Main wrapper */
+/* ✅ SINGLE SCROLL CONTAINER - Excel-like Freeze Panes */
 .timeline-wrapper {
-  display: flex;
+  display: flex; /* Flexbox for sidebar + grid layout */
   width: 100%;
   max-height: 600px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto; /* ✅ Single scroll for BOTH X and Y */
+  position: relative;
 }
 
-/* ======================== Court Names (Sticky Left) ======================== */
+/* ======================== Court Names (Sticky Left Column) ======================== */
 .timeline-court-names {
+  position: sticky;
+  left: 0;
+  z-index: 20; /* Above grid content */
   flex-shrink: 0;
   width: 200px;
-  border-right: 2px solid #d1d5db;
   background: #f9fafb;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .timeline-court-name-header {
+  position: sticky;
+  top: 0;
+  z-index: 30; /* Top-left corner - highest */
   display: flex;
   align-items: center;
   justify-content: center;
   height: 50px;
   border-bottom: 2px solid #d1d5db;
+  border-right: 2px solid #d1d5db;
   background: #f3f4f6;
   font-weight: 600;
   padding: 0 12px;
@@ -54,33 +59,36 @@
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid #e5e7eb;
+  border-right: 2px solid #d1d5db;
   background: #fafbfc;
   flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 20;
 }
 
 .timeline-court-name-row:hover {
   background: #f3f4f6;
 }
 
-/* ======================== Timeline Grid (Scrollable Right) ======================== */
+/* ======================== Timeline Grid (Scrollable with Sticky Header) ======================== */
 .timeline-grid-wrapper {
   flex: 1;
-  overflow-x: auto;
-  overflow-y: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
+  min-width: 0; /* Allow flex shrink */
 }
 
-/* Timeline header (hour labels) */
+/* Timeline header (hour labels) - Sticky top */
 .timeline-header {
+  position: sticky;
+  top: 0;
+  z-index: 10; /* Above grid body, below court names */
   display: flex;
   height: 50px;
   border-bottom: 2px solid #d1d5db;
   background: #f3f4f6;
-  position: sticky;
-  top: 0;
-  z-index: 10;
   flex-shrink: 0;
 }
 

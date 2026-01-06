@@ -13,8 +13,7 @@ import Groq from 'groq-sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductsService } from '../pos/products.service';
 import { BookingsService } from '../bookings/bookings.service';
-import { PaymentsService } from '../payments/payments.service';
-import { Role, PaymentMethod, BookingType } from '@prisma/client';
+import { Role, BookingType } from '@prisma/client';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🤖 SMART AGENT - SmartCourt AI Assistant
@@ -277,6 +276,7 @@ lời chính xác dựa trên dữ liệu có sẵn.
 - Đặt tối đa: 4 giờ/lần (nếu cần thêm phải liên hệ staff)
 - Thanh toán: **100% TRƯỚC** khi đặt sân (qua ví điện tử hoặc VNPay)
 - KHÔNG áp dụng đặt cọc, phải thanh toán full
+- ❌ **CHATBOT KHÔNG XỬ LÝ THANH TOÁN** - Hướng dẫn user thanh toán qua WEB/APP
 
 ⚠️ **CHÍNH SÁCH HỦY SÂN:**
 - Hủy trước 24h: Hoàn 100% tiền
@@ -647,34 +647,7 @@ const CREATE_FIXED_SCHEDULE_BOOKING: FunctionDeclaration = {
   },
 };
 
-const PAYMENT: FunctionDeclaration = {
-  name: 'payment',
-  description:
-    '🆕 PHASE 4: Thanh toán booking bằng ví điện tử. GỌI KHI: khách hỏi "thanh toán", "trả tiền", "payment". Có 2 phương thức: WALLET (từ ví) hoặc VNPAY (chuyển khoản). YÊU CẦU đăng nhập.',
-  parameters: {
-    type: SchemaType.OBJECT,
-    properties: {
-      bookingCode: {
-        type: SchemaType.STRING,
-        description:
-          'Mã booking cần thanh toán (VD: COURT-ABC123). Có thể lấy từ get_user_bookings.',
-      },
-      paymentMethod: {
-        type: SchemaType.STRING,
-        description:
-          'Phương thức thanh toán: "WALLET" (ví điện tử) hoặc "VNPAY" (chuyển khoản)',
-        format: 'enum',
-        enum: ['WALLET', 'VNPAY'],
-      },
-      confirmed: {
-        type: SchemaType.BOOLEAN,
-        description:
-          '🆕 true khi khách đã xác nhận thanh toán sau khi xem số tiền.',
-      },
-    },
-    required: ['bookingCode', 'paymentMethod'],
-  },
-};
+// ❌ PAYMENT FUNCTION REMOVED - Users must pay via web interface
 
 // Tools array
 const AI_TOOLS = [
@@ -687,10 +660,89 @@ const AI_TOOLS = [
       CANCEL_BOOKING,
       GET_WALLET_BALANCE,
       CREATE_FIXED_SCHEDULE_BOOKING,
-      PAYMENT,
     ],
   },
 ];
+
+/**
+ * Convert Gemini SchemaType enum to JSON Schema string type
+ */
+function convertSchemaType(type: SchemaType): string {
+  switch (type) {
+    case SchemaType.STRING:
+      return 'string';
+    case SchemaType.NUMBER:
+      return 'number';
+    case SchemaType.BOOLEAN:
+      return 'boolean';
+    case SchemaType.ARRAY:
+      return 'array';
+    case SchemaType.OBJECT:
+      return 'object';
+    default:
+      return 'string';
+  }
+}
+
+/**
+ * Recursively convert Gemini parameters to Groq JSON Schema format
+ * Groq requires strict JSON Schema compliance
+ */
+function convertParameters(params: any): any {
+  if (!params) {
+    return {
+      type: 'object',
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    };
+  }
+
+  const converted: any = {
+    type: convertSchemaType(params.type),
+  };
+
+  // Convert properties recursively
+  if (params.properties) {
+    converted.properties = {};
+    for (const [key, value] of Object.entries(params.properties)) {
+      const prop: any = value;
+      const convertedProp: any = {
+        type: convertSchemaType(prop.type),
+      };
+
+      // Add description if exists
+      if (prop.description) {
+        convertedProp.description = prop.description;
+      }
+
+      // Handle array items
+      if (prop.items) {
+        convertedProp.items = {
+          type: convertSchemaType(prop.items.type),
+        };
+      }
+
+      // Handle enum
+      if (prop.enum) {
+        convertedProp.enum = prop.enum;
+      }
+
+      converted.properties[key] = convertedProp;
+    }
+  } else {
+    // If no properties, add empty object
+    converted.properties = {};
+  }
+
+  // Required must always be an array
+  converted.required = Array.isArray(params.required) ? params.required : [];
+
+  // Prevent additional properties for strict validation
+  converted.additionalProperties = false;
+
+  return converted;
+}
 
 /**
  * Convert Gemini function declarations to Groq tools format
@@ -706,14 +758,13 @@ function convertToGroqTools() {
     CANCEL_BOOKING,
     GET_WALLET_BALANCE,
     CREATE_FIXED_SCHEDULE_BOOKING,
-    PAYMENT,
   ]) {
     tools.push({
       type: 'function',
       function: {
         name: func.name,
         description: func.description,
-        parameters: func.parameters,
+        parameters: convertParameters(func.parameters),
       },
     });
   }
@@ -739,7 +790,6 @@ export class ChatService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly productsService: ProductsService,
     private readonly bookingsService: BookingsService,
-    private readonly paymentsService: PaymentsService,
   ) {}
 
   /**
@@ -1095,7 +1145,7 @@ export class ChatService implements OnModuleInit {
           startTime: startDateTime.toISOString(),
           endTime: endDateTime.toISOString(),
           type: BookingType.REGULAR,
-          paymentMethod: PaymentMethod.WALLET,
+          paymentMethod: 'WALLET', // Default payment method
         },
         userId,
         Role.CUSTOMER,
@@ -1119,9 +1169,9 @@ export class ChatService implements OnModuleInit {
         },
         // 🆕 PHASE 3: Suggested actions
         suggestedActions: [
-          '💰 Thanh toán ngay để xác nhận booking',
+          '🏸 Xem lịch đặt sân của bạn',
           '🥤 Xem menu đồ uống và sản phẩm',
-          '📋 Xem tất cả lịch đặt sân của bạn',
+          '💵 Kiểm tra số dư ví',
         ],
       };
     } catch (error) {
@@ -1151,7 +1201,7 @@ export class ChatService implements OnModuleInit {
         return {
           success: false,
           error:
-            '💰 **Số dư không đủ**\n\n❌ Tài khoản của bạn không đủ tiền để đặt sân.\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.',
+            '💰 **Số dư không đủ**\n\n❌ Tài khoản của bạn không đủ tiền để đặt sân.\n\n💡 Vui lòng truy cập trang web để nạp tiền vào ví hoặc thanh toán qua VNPay.',
         };
       }
 
@@ -1217,17 +1267,14 @@ export class ChatService implements OnModuleInit {
       bookings.forEach((booking) => {
         const start = new Date(booking.startTime);
         const end = new Date(booking.endTime);
-        const current = new Date(start);
 
-        while (current < end) {
-          const hour = current.getHours();
+        // Mark each hour slot that overlaps with this booking
+        for (let hour = start.getHours(); hour < end.getHours(); hour++) {
           const key = `${hour}`;
-
           if (!bookingMap.has(key)) {
             bookingMap.set(key, new Set());
           }
           bookingMap.get(key).add(booking.courtId);
-          current.setHours(current.getHours() + 1);
         }
       });
 
@@ -1243,7 +1290,8 @@ export class ChatService implements OnModuleInit {
         hour < OPERATING_HOURS.end;
         hour++
       ) {
-        if (isToday && hour <= currentHour) continue;
+        // Skip only past hours, not the current hour
+        if (isToday && hour < currentHour) continue;
 
         const bookedCourtIds = bookingMap.get(`${hour}`) || new Set();
         const availableCourts = courts.filter((c) => !bookedCourtIds.has(c.id));
@@ -1376,7 +1424,7 @@ export class ChatService implements OnModuleInit {
         totalPrice: `${Number(b.totalPrice).toLocaleString('vi-VN')}đ`,
       }));
 
-      // 🆕 PHASE 3: Check for pending payments
+      // 🆕 PHASE 3: Check for pending payments (info only, no payment action)
       const pendingPayments = bookings.filter(
         (b) => b && b.paymentStatus === 'UNPAID',
       );
@@ -1385,13 +1433,13 @@ export class ChatService implements OnModuleInit {
         success: true,
         message: `✅ Bạn có **${bookings.length} lịch đặt sân** sắp tới`,
         bookings: bookingList,
-        // 🆕 PHASE 3: Suggested actions based on booking status
+        // 🆕 PHASE 3: Suggested actions (no payment)
         suggestedActions:
           pendingPayments.length > 0
             ? [
-                `💰 Thanh toán ${pendingPayments.length} booking`,
                 '🏸 Đặt thêm sân mới',
                 '📅 Xem sân trống',
+                '💵 Xem số dư ví',
               ]
             : [
                 '🏸 Đặt thêm sân mới',
@@ -1689,12 +1737,6 @@ export class ChatService implements OnModuleInit {
       const groupData = result.bookingGroup;
       const summaryData = result.summary;
 
-      // Get group code from bookings
-      const firstBooking = await this.prisma.booking.findFirst({
-        where: { bookingGroupId: groupData.id },
-        select: { bookingCode: true },
-      });
-
       return {
         success: true,
         message: `✅ **Đặt lịch cố định thành công!**\n\n📋 Mã nhóm: GROUP-${groupData.id}\n🏸 Sân: Sân ${args.courtId}\n📅 Tổng số buổi: ${summaryData.totalSessions} buổi\n💰 Tổng tiền: ${Number(groupData.finalPrice).toLocaleString('vi-VN')}đ (Giảm ${summaryData.discount})\n\n💡 Hệ thống đã tạo mã QR chung cho tất cả các buổi!`,
@@ -1705,9 +1747,9 @@ export class ChatService implements OnModuleInit {
           discount: summaryData.discount,
         },
         suggestedActions: [
-          '💰 Thanh toán ngay',
-          '📋 Xem tất cả lịch đặt',
+          '� Xem tất cả lịch đặt',
           '💵 Xem số dư ví',
+          '🏸 Đặt sân mới',
         ],
       };
     } catch (error) {
@@ -1721,122 +1763,8 @@ export class ChatService implements OnModuleInit {
     }
   }
 
-  /**
-   * 💰 payment - Thanh toán booking
-   * 🆕 PHASE 4: Payment with wallet or VNPay
-   */
-  private async handlePayment(
-    args: {
-      bookingCode: string;
-      paymentMethod: 'WALLET' | 'VNPAY';
-      confirmed?: boolean;
-    },
-    userId: number | null,
-  ): Promise<object> {
-    try {
-      this.logger.log(
-        `💰 [Function] payment: ${JSON.stringify(args)}, userId: ${userId}`,
-      );
-
-      // Validate login
-      if (!userId) {
-        return {
-          success: false,
-          error:
-            '🔒 **Bạn cần đăng nhập để thanh toán**\n\n💡 Vui lòng đăng nhập để sử dụng tính năng này.',
-        };
-      }
-
-      // Get booking
-      const booking = await this.prisma.booking.findFirst({
-        where: {
-          bookingCode: args.bookingCode,
-          userId,
-        },
-        include: {
-          court: { select: { name: true } },
-        },
-      });
-
-      if (!booking) {
-        return {
-          success: false,
-          error: `❌ **Không tìm thấy booking ${args.bookingCode}**\n\n💡 Vui lòng kiểm tra lại mã booking.`,
-        };
-      }
-
-      // Check if already paid
-      if (booking.paymentStatus === 'PAID') {
-        return {
-          success: true,
-          message: `✅ **Booking này đã được thanh toán!**\n\n📋 Mã: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ`,
-          suggestedActions: ['📋 Xem lịch đặt', '🏸 Đặt sân mới'],
-        };
-      }
-
-      // Step 1: Confirmation phase
-      if (!args.confirmed) {
-        return {
-          success: true,
-          message: `⚠️ **Xác nhận thanh toán:**\n\n📋 Mã booking: ${booking.bookingCode}\n🏸 Sân: ${booking.court?.name}\n📅 Ngày: ${new Date(booking.startTime).toLocaleDateString('vi-VN')}\n⏰ Giờ: ${new Date(booking.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(booking.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}\n💰 Số tiền: **${Number(booking.totalPrice).toLocaleString('vi-VN')}đ**\n💳 Phương thức: ${args.paymentMethod === 'WALLET' ? 'Ví điện tử' : 'VNPay'}\n\n❓ Xác nhận thanh toán?`,
-          booking: {
-            code: booking.bookingCode,
-            totalPrice: Number(booking.totalPrice),
-            paymentMethod: args.paymentMethod,
-          },
-          suggestedActions: ['Có, thanh toán', 'Không, hủy bỏ'],
-        };
-      }
-
-      // Step 2: Execute payment
-      if (args.paymentMethod === 'WALLET') {
-        // Pay with wallet
-        const result = await this.paymentsService.payWithWallet(
-          booking.id,
-          userId,
-        );
-
-        if (!result.success) {
-          return {
-            success: false,
-            error: `❌ **Thanh toán thất bại**\n\n${result.message}\n\n💡 Vui lòng nạp thêm tiền vào ví hoặc chọn phương thức thanh toán khác.`,
-            suggestedActions: ['💳 Nạp tiền vào ví', '💰 Xem số dư ví'],
-          };
-        }
-
-        return {
-          success: true,
-          message: `✅ **Thanh toán thành công!**\n\n📋 Mã booking: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ\n💳 Phương thức: Ví điện tử\n\n📱 Bạn có thể dùng mã QR để check-in khi đến sân.`,
-          payment: {
-            bookingCode: booking.bookingCode,
-            amount: Number(booking.totalPrice),
-            method: 'WALLET',
-            status: 'PAID',
-          },
-          suggestedActions: ['📋 Xem lịch đặt', '🏸 Đặt sân mới', '💵 Xem ví'],
-        };
-      } else {
-        // VNPay payment
-        return {
-          success: true,
-          message: `💳 **Chuyển đến trang thanh toán VNPay...**\n\n📋 Mã booking: ${booking.bookingCode}\n💰 Số tiền: ${Number(booking.totalPrice).toLocaleString('vi-VN')}đ\n\n💡 Vui lòng hoàn tất thanh toán trên trang VNPay.`,
-          payment: {
-            bookingCode: booking.bookingCode,
-            amount: Number(booking.totalPrice),
-            method: 'VNPAY',
-            vnpayUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/${booking.id}`,
-          },
-          suggestedActions: ['💰 Thanh toán bằng ví', '📋 Xem lịch đặt'],
-        };
-      }
-    } catch (error) {
-      this.logger.error(`❌ Error in payment: ${error.message}`);
-      return {
-        success: false,
-        error: `❌ **Không thể thanh toán**\n\n🔧 Lỗi: ${error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ hotline: **1900-8888**`,
-      };
-    }
-  }
+  // ❌ PAYMENT FUNCTION REMOVED
+  // Users must complete payment via the web interface or mobile app
 
   /**
    * �🔄 Execute a function call from AI
@@ -1884,16 +1812,81 @@ export class ChatService implements OnModuleInit {
         );
         break;
 
-      case 'payment':
-        result = await this.handlePayment(args as any, userId);
-        break;
-
       default:
         this.logger.warn(`⚠️ Unknown function: ${name}`);
         result = { error: `Unknown function: ${name}` };
     }
 
     return JSON.stringify(result);
+  }
+
+  /**
+   * 📝 Format function result as natural Vietnamese response
+   */
+  private formatFunctionResult(functionName: string, result: any): string {
+    if (functionName === 'get_court_availability') {
+      if (!result.success) {
+        return (
+          result.error ||
+          '❌ Không thể tra cứu sân trống lúc này. Vui lòng thử lại!'
+        );
+      }
+
+      const { availability = [], summary = {}, date } = result;
+
+      if (summary.availableSlots === 0) {
+        return `❌ **Tất cả sân đã đầy** vào ${date}\n\nXin lỗi, hiện tại không còn sân trống. Bạn có thể:\n• Xem sân trống ngày khác\n• Đặt sân cho ngày mai\n• Liên hệ hotline: **1900-8888**`;
+      }
+
+      const availableSlots = availability.filter((s: any) => !s.isFull);
+      let response = `🏸 **Còn sân trống!** Hôm nay, ${date}, có **${summary.availableSlots}** khung giờ còn trống:\n\n`;
+
+      availableSlots.slice(0, 10).forEach((slot: any) => {
+        const courtNames = slot.availableCourts
+          .map((c: any) => c.name)
+          .join(', ');
+        response += `**${slot.time}**: Còn ${slot.totalAvailable} sân (${courtNames})\n`;
+      });
+
+      response += '\nBạn muốn đặt sân không? 🏸';
+      return response;
+    }
+
+    if (functionName === 'get_user_bookings') {
+      if (!result.success) {
+        return (
+          result.error || '❌ Không thể xem lịch đặt sân. Vui lòng thử lại!'
+        );
+      }
+
+      const { bookings = [] } = result;
+      if (bookings.length === 0) {
+        return '📋 **Chưa có lịch đặt sân**\n\nBạn chưa đặt sân nào. Hãy đặt sân ngay! 🏸';
+      }
+
+      let response = `📋 **Lịch đặt sân của bạn** (${bookings.length} booking):\n\n`;
+      bookings.slice(0, 5).forEach((booking: any) => {
+        response += `**${booking.bookingCode}**\n`;
+        response += `• Sân: ${booking.courtName}\n`;
+        response += `• Thời gian: ${booking.date} ${booking.time}\n`;
+        response += `• Trạng thái: ${booking.status}\n`;
+        response += `• Thanh toán: ${booking.paymentStatus}\n\n`;
+      });
+
+      return response;
+    }
+
+    if (functionName === 'get_wallet_balance') {
+      if (!result.success) {
+        return result.error || '❌ Không thể xem số dư ví. Vui lòng thử lại!';
+      }
+
+      const { balance } = result;
+      return `💰 **Số dư ví của bạn**\n\n${balance.toLocaleString('vi-VN')}đ\n\nBạn muốn nạp thêm tiền không?`;
+    }
+
+    // Default: return formatted JSON for other functions
+    return `✅ **Kết quả**\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1929,24 +1922,27 @@ export class ChatService implements OnModuleInit {
   }
 
   /**
-   * 🆕 Detect if response is a generic greeting (to prevent greeting loop)
+   * 🆕 Detect if USER message is a simple greeting (to prevent greeting loop)
    */
-  private isGenericGreeting(response: string): boolean {
-    const lowerResponse = response.toLowerCase();
-    const greetingPatterns = [
+  private isUserGreeting(message: string): boolean {
+    const lowerMessage = message.trim().toLowerCase();
+    const simpleGreetings = [
       'xin chào',
+      'chào',
       'chào bạn',
-      'tôi là smartcourt',
-      'trợ lý ai',
-      'tôi có thể giúp bạn',
-      'bạn cần gì',
+      'chào bot',
+      'hi',
       'hello',
-      'hi there',
+      'hey',
     ];
 
-    // Check if response contains greeting pattern AND is relatively short (< 200 chars)
-    return greetingPatterns.some(pattern => lowerResponse.includes(pattern)) 
-      && response.length < 300;
+    // Check if message is ONLY a greeting (< 30 chars and matches pattern)
+    return (
+      simpleGreetings.some(
+        (pattern) =>
+          lowerMessage === pattern || lowerMessage.startsWith(pattern + ' '),
+      ) && message.length < 30
+    );
   }
 
   /**
@@ -2013,16 +2009,8 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 
     this.logger.log(`📅 Current date context: ${currentDate} ${currentTime}`);
 
-    // Route to appropriate AI provider
-    if (this.aiProvider === 'groq') {
-      return this.generateResponseWithGroq(messageWithContext, userId, history);
-    } else {
-      return this.generateResponseWithGemini(
-        messageWithContext,
-        userId,
-        history,
-      );
-    }
+    // 🔥 Use only Groq (cost-effective)
+    return this.generateResponseWithGroq(messageWithContext, userId, history);
   }
 
   /**
@@ -2039,33 +2027,41 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 
     try {
       const currentDate = new Date().toISOString().split('T')[0];
-      
-      // Enhanced system instruction for Groq with strict JSON tool calling + Context Awareness
+
+      // Enhanced system instruction for Groq - XML Function Calling
       const groqSystemInstruction = `${SYSTEM_INSTRUCTION}
 
-📌 CRITICAL TOOL CALLING RULES:
-- ALWAYS use tools when user asks about: court availability, booking, wallet, products
-- Use ONLY valid JSON for tool arguments, NO XML syntax
-- Example tool calls:
-  * "Hôm nay còn sân không?" → CALL get_court_availability({"date": "${currentDate}"})
-  * "Số dư ví?" → CALL get_wallet_balance({})
-  * "Giá sân?" → CALL get_court_availability({"date": "${currentDate}"})
-  * "Menu đồ uống?" → CALL get_pos_products({"category": "DRINK"})
+📌 TOOL CALLING FORMAT (XML SYNTAX):
+When you need to call a function, use this EXACT XML format:
 
-🧠 CONTEXT AWARENESS RULES (CRITICAL):
-1. **Temporal Expressions** - PHẢI resolve với ngày hiện tại:
-   - "hôm nay" = ${currentDate}
-   - "ngày mai" = ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-   - "ngày mốt" / "ngày kia" = ${new Date(Date.now() + 172800000).toISOString().split('T')[0]}
-   - "tuần sau" = ${new Date(Date.now() + 604800000).toISOString().split('T')[0]}
-   - "cuối tuần" = Saturday or Sunday này
+<function=FUNCTION_NAME ARGUMENTS></function>
 
-2. **Affirmative Responses** - Khi user trả lời xác nhận:
-   - "Có" / "Được" / "OK" / "Ừ" / "Đồng ý" / "Yes" → Tiếp tục action từ context
-   - VD: Bot hỏi "Bạn muốn đặt sân không?" → User: "Có" → PHẢI trigger create_booking
-   
-3. **Negative Responses**:
-   - "Không" / "Thôi" / "No" / "Cancel" → Hủy action, hỏi "Bạn cần gì khác?"
+Example function calls:
+* "Hôm nay còn sân không?" → <function=get_court_availability {"date": "${currentDate}"}></function>
+* "Số dư ví?" → <function=get_wallet_balance {}></function>
+* "Giá sân?" → <function=get_court_availability {"date": "${currentDate}"}></function>
+* "Menu đồ uống?" → <function=get_pos_products {"category": "DRINK"}></function>
+* "Đặt sân 1 lúc 18h ngày mai" → <function=create_booking {"courtId": 1, "date": "${new Date(Date.now() + 86400000).toISOString().split('T')[0]}", "time": "18:00", "duration": 1, "confirmed": false}></function>
+
+🎯 AVAILABLE FUNCTIONS:
+1. get_court_availability - Check available courts by date
+2. get_pos_products - Get menu/products (drinks, equipment)
+3. create_booking - Book a court (require: courtId, date, time, duration)
+4. get_user_bookings - View user's booking history
+5. cancel_booking - Cancel a booking
+6. get_wallet_balance - Check wallet balance
+7. payment - Process payment
+
+⚠️ CRITICAL RULES:
+- ALWAYS wrap function calls in <function=...></function> tags
+- Arguments MUST be valid JSON
+- For queries about court availability, booking, products → ALWAYS use function calls
+- DO NOT explain the function call, just return the XML tag directly
+
+🧠 CONTEXT AWARENESS:
+- "hôm nay" = ${currentDate}
+- "ngày mai" = ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+- "ngày mốt" = ${new Date(Date.now() + 172800000).toISOString().split('T')[0]}
 
 4. **Vague Questions** - PHẢI xem conversation history:
    - "Còn sân 2 thì sao?" → Lấy context từ câu trước (time, date)
@@ -2082,14 +2078,39 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 🚫 NEVER return greeting message if conversation has context. Always continue from previous topic.`;
 
       // Convert history to Groq format
-      const messages: any[] = [{ role: 'system', content: groqSystemInstruction }];
+      const messages: any[] = [
+        { role: 'system', content: groqSystemInstruction },
+      ];
 
-      // Add history if provided
-      if (history && history.length > 0) {
-        for (const msg of history) {
+      // 🔥 CRITICAL FIX: Skip history for tool calling to avoid XML format conflicts
+      // Groq llama-3.3 generates XML when confused by long history with function calls
+      // Tool calling queries (court availability, booking, etc.) don't need conversation context
+      const isToolCallQuery = message
+        .toLowerCase()
+        .match(
+          /còn sân|sân trống|đặt sân|giá sân|menu|đồ uống|ví|số dư|lịch đặt|booking/,
+        );
+
+      if (!isToolCallQuery && history && history.length > 0) {
+        // Only add history for general conversation (greetings, questions)
+        // Take only last 6 messages to prevent context pollution
+        const recentHistory = history.slice(-6);
+
+        for (const msg of recentHistory) {
+          const content = msg.parts[0]?.text || '';
+
+          // Skip empty messages and function call outputs
+          if (
+            !content.trim() ||
+            content.includes('🔧') ||
+            content.includes('[Function]')
+          ) {
+            continue;
+          }
+
           messages.push({
             role: msg.role === 'model' ? 'assistant' : 'user',
-            content: msg.parts[0]?.text || '',
+            content: content,
           });
         }
       }
@@ -2098,21 +2119,97 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
       messages.push({ role: 'user', content: message });
 
       // Call Groq with function calling
-      this.logger.log(`🔧 Tools available: ${this.getGroqTools().length}`);
-      
+      const groqTools = this.getGroqTools();
+      this.logger.log(`🔧 Tools available: ${groqTools.length}`);
+      this.logger.log(
+        `📨 Messages to send: ${messages.length} (including system)`,
+      );
+
+      // 🐛 DEBUG: Log first tool to verify format
+      if (groqTools.length > 0) {
+        this.logger.debug(
+          `📋 Sample tool: ${JSON.stringify(groqTools[2], null, 2)}`,
+        ); // Log get_court_availability
+      }
+
+      // 🔥 CRITICAL FIX: Don't send tools parameter to Groq
+      // Let it generate XML freely, then parse manually
+      // Groq's native tool calling is deprecated and causes validation errors
       const response = await this.groqClient.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages,
-        tools: this.getGroqTools(),
-        tool_choice: 'auto',
-        max_tokens: 1024,
-        temperature: 0.7,
+        // NO tools parameter - let AI generate XML format freely
+        max_tokens: 2048,
+        temperature: 0.3,
       });
 
       const choice = response.choices[0];
-      this.logger.log(`🤖 Response type: ${choice.message.tool_calls ? 'with tool calls' : 'text only'}`);
+      const textResponse = choice.message.content || '';
 
-      // Check if function calls are needed
+      this.logger.log(
+        `🤖 Response type: ${choice.message.tool_calls ? 'native tool calls' : 'text response'}`,
+      );
+
+      // 🔥 Parse XML function calls (Groq generates <function=...> format)
+      const xmlFunctionMatch = textResponse.match(
+        /<function=(\w+)\s*({[^}]+})\s*>.*?<\/function>/,
+      );
+
+      if (xmlFunctionMatch) {
+        const functionName = xmlFunctionMatch[1];
+        const functionArgsStr = xmlFunctionMatch[2];
+
+        this.logger.log(`🔧 Parsed XML function call: ${functionName}`);
+
+        try {
+          const functionArgs = JSON.parse(functionArgsStr);
+          this.logger.log(`📦 Args: ${JSON.stringify(functionArgs)}`);
+
+          const resultStr = await this.executeFunction(
+            { name: functionName, args: functionArgs },
+            userId,
+          );
+
+          // Parse function result
+          const result = JSON.parse(resultStr);
+
+          // 🔥 CRITICAL: Send function result BACK to AI for contextual filtering
+          // This allows AI to answer specific questions like "17h-19h có sân không?"
+          // instead of just dumping all available slots
+
+          const functionResultMessage = `Function ${functionName} returned:\n${JSON.stringify(result, null, 2)}`;
+
+          messages.push({
+            role: 'assistant',
+            content: `<function=${functionName} ${functionArgsStr}></function>`,
+          });
+
+          messages.push({
+            role: 'user',
+            content: `[FUNCTION_RESULT]\n${functionResultMessage}\n\nDựa vào kết quả trên, hãy trả lời câu hỏi của tôi một cách chính xác và ngắn gọn. Chỉ hiển thị thông tin RELEVANT với câu hỏi.`,
+          });
+
+          // Get AI's final response with function context
+          const finalResponse = await this.groqClient.chat.completions.create({
+            model: 'llama-3.3-70b-versatile',
+            messages,
+            max_tokens: 1024,
+            temperature: 0.3,
+          });
+
+          return (
+            finalResponse.choices[0].message.content ||
+            this.formatFunctionResult(functionName, result)
+          );
+        } catch (error) {
+          this.logger.error(
+            `❌ Failed to parse XML function: ${error.message}`,
+          );
+          return this.getFallbackResponse(message);
+        }
+      }
+
+      // Check if native function calls are present (fallback)
       if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
         // Execute function calls
         const toolResults: any[] = [];
@@ -2120,11 +2217,13 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
         for (const toolCall of choice.message.tool_calls) {
           const functionName = toolCall.function.name;
           let functionArgs: any;
-          
+
           try {
             functionArgs = JSON.parse(toolCall.function.arguments);
-          } catch (parseError) {
-            this.logger.error(`❌ Failed to parse tool arguments: ${toolCall.function.arguments}`);
+          } catch {
+            this.logger.error(
+              `❌ Failed to parse tool arguments: ${toolCall.function.arguments}`,
+            );
             continue;
           }
 
@@ -2164,34 +2263,46 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
 
       // No function calls, return text directly
       this.logger.log('🤖 AI Response (no function calls)');
-      const textResponse = choice.message.content;
-      
+      const plainTextResponse = choice.message.content;
+
       // If response is empty or just greeting, check if should use fallback
-      if (!textResponse || textResponse.trim().length === 0) {
+      if (!plainTextResponse || plainTextResponse.trim().length === 0) {
         this.logger.warn('⚠️ Empty response from Groq, using fallback');
         return this.getFallbackResponse(message);
       }
-      
-      // 🆕 ANTI-GREETING LOOP: If history exists and response is generic greeting, retry with emphasis
-      if (history && history.length > 0 && this.isGenericGreeting(textResponse)) {
-        this.logger.warn('⚠️ Detected greeting loop with existing history, requesting clarification');
+
+      // 🆕 ANTI-GREETING LOOP: If user sends greeting with existing history, ask for clarification
+      if (
+        history &&
+        history.length > 2 && // At least 1 exchange (2 messages)
+        this.isUserGreeting(message)
+      ) {
+        this.logger.warn(
+          '⚠️ Detected user greeting loop with existing history, requesting clarification',
+        );
         return 'Xin lỗi, tôi chưa hiểu rõ ý bạn. Bạn có thể nói rõ hơn được không? 🤔\n\nVí dụ: "Đặt sân 3 lúc 18h ngày mai" hoặc "Kiểm tra sân trống hôm nay"';
       }
-      
-      return textResponse;
+
+      return plainTextResponse;
     } catch (error) {
-      this.logger.error(`❌ Groq error: ${error.status} ${JSON.stringify(error.error || error.message)}`);
-      
+      this.logger.error(
+        `❌ Groq error: ${error.status} ${JSON.stringify(error.error || error.message)}`,
+      );
+
       // Log detailed error for debugging
       if (error.error) {
-        this.logger.error(`Error details: ${JSON.stringify(error.error, null, 2)}`);
+        this.logger.error(
+          `Error details: ${JSON.stringify(error.error, null, 2)}`,
+        );
       }
-      
+
       // If tool_use_failed, provide specific guidance
       if (error.error?.code === 'tool_use_failed') {
-        this.logger.error('⚠️ Tool validation failed. Check tool definitions and arguments format.');
+        this.logger.error(
+          '⚠️ Tool validation failed. Check tool definitions and arguments format.',
+        );
       }
-      
+
       return this.getFallbackResponse(message);
     }
   }
@@ -2240,13 +2351,19 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
           if (!functionCalls || functionCalls.length === 0) {
             const text = response.text();
             this.logger.log(`🤖 AI Response (iter ${iteration + 1})`);
-            
-            // 🆕 ANTI-GREETING LOOP: If history exists and response is generic greeting, return clarification
-            if (text && history && history.length > 0 && this.isGenericGreeting(text)) {
-              this.logger.warn('⚠️ Detected greeting loop with existing history (Gemini), requesting clarification');
+
+            // 🆕 ANTI-GREETING LOOP: If user sends greeting with existing history, ask for clarification
+            if (
+              history &&
+              history.length > 2 && // At least 1 exchange (2 messages)
+              this.isUserGreeting(message)
+            ) {
+              this.logger.warn(
+                '⚠️ Detected user greeting loop with existing history (Gemini), requesting clarification',
+              );
               return 'Xin lỗi, tôi chưa hiểu rõ ý bạn. Bạn có thể nói rõ hơn được không? 🤔\n\nVí dụ: "Đặt sân 3 lúc 18h ngày mai" hoặc "Kiểm tra sân trống hôm nay"';
             }
-            
+
             return text || this.getFallbackResponse(message);
           }
 
@@ -2807,6 +2924,25 @@ Bạn cần hỗ trợ gì về đặt sân cầu lông không ạ? 🏸`;
     } catch (error) {
       this.logger.error(`❌ Failed to get chat history: ${error.message}`);
       return [];
+    }
+  }
+
+  /**
+   * 🗑️ Clear chat history for user
+   */
+  async clearChatHistory(userId: number): Promise<number> {
+    try {
+      const result = await this.prisma.chatMessage.deleteMany({
+        where: { userId },
+      });
+
+      this.logger.log(
+        `🗑️ Cleared ${result.count} chat messages for user ${userId}`,
+      );
+      return result.count;
+    } catch (error) {
+      this.logger.error(`❌ Failed to clear chat history: ${error.message}`);
+      return 0;
     }
   }
 

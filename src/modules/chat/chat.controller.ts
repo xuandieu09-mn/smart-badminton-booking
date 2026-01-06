@@ -1,4 +1,14 @@
-import { Controller, Post, Body, Req, Get, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  Get,
+  Query,
+  Delete,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ChatService } from './chat.service';
 import { ChatMessageDto } from './dto/chat.dto';
@@ -49,10 +59,10 @@ export class ChatController {
           userId = payload.sub || payload.userId || null;
           console.log('✅ UserId from JWT token:', userId);
           console.log('📦 JWT Payload:', payload);
-        } catch (error) {
+        } catch (error: any) {
           // Invalid token - continue without userId (anonymous chat)
           console.log('⚠️ Invalid JWT token, continuing as anonymous');
-          console.log('❌ Error:', error.message);
+          console.log('❌ Error:', error?.message || error);
         }
       } else {
         console.log('⚠️ No Authorization header found');
@@ -72,8 +82,9 @@ export class ChatController {
 
     // Detect intent and track analytics
     const intent = this.chatService['detectIntent'](body.message);
-    const wasResolved = !reply.includes('Xin lỗi') && !reply.includes('chưa hiểu');
-    
+    const wasResolved =
+      !reply.includes('Xin lỗi') && !reply.includes('chưa hiểu');
+
     // Track analytics
     if (userId) {
       await this.chatService.trackChatAnalytics(
@@ -136,7 +147,7 @@ export class ChatController {
           const token = authHeader.substring(7);
           const payload = this.jwtService.verify(token);
           userId = payload.sub || payload.userId || null;
-        } catch (error) {
+        } catch {
           console.log('⚠️ Invalid JWT token');
         }
       }
@@ -152,5 +163,44 @@ export class ChatController {
     );
 
     return { messages };
+  }
+
+  /**
+   * 🗑️ DELETE /chat/history - Clear chat history for user
+   */
+  @Delete('history')
+  @HttpCode(HttpStatus.OK)
+  async clearChatHistory(
+    @Req() req: Request,
+  ): Promise<{ message: string; cleared: number }> {
+    let userId: number | null = null;
+
+    // Extract userId from request
+    if (req.user) {
+      const user = req.user as RequestUser;
+      userId = this.extractUserId(user);
+    } else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.substring(7);
+          const payload = this.jwtService.verify(token);
+          userId = payload.sub || payload.userId || null;
+        } catch {
+          console.log('⚠️ Invalid JWT token');
+        }
+      }
+    }
+
+    if (!userId) {
+      return { message: 'No user authenticated', cleared: 0 };
+    }
+
+    const cleared = await this.chatService.clearChatHistory(userId);
+
+    return {
+      message: `Successfully cleared ${cleared} chat messages`,
+      cleared,
+    };
   }
 }

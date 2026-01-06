@@ -11,6 +11,7 @@ import AdminBookingModal from '../components/AdminBookingModal';
 import BookingGroupBadge from '@/components/admin/BookingGroupBadge';
 import BookingGroupModal from '@/components/admin/BookingGroupModal';
 import HybridDatePicker from '@/components/common/HybridDatePicker';
+import { useAuthStore } from '@/store/authStore';
 import '../../calendar/components/TimelineResourceGrid.css';
 
 // ==================== TYPES ====================
@@ -47,6 +48,7 @@ export const AdminBookingsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const { user } = useAuthStore(); // ✅ Get current admin user
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -189,6 +191,7 @@ export const AdminBookingsPage: React.FC = () => {
             endHour={23}
             onBookingClick={handleBookingClick}
             isLoading={courtsLoading || bookingsLoading}
+            currentUserId={user?.id} // ✅ Pass admin user ID
             userRole="ADMIN"
           />
         </div>

@@ -8,6 +8,7 @@ import TimelineResourceGrid, {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../../services/api/client';
 import HybridDatePicker from '@/components/common/HybridDatePicker';
+import { useAuthStore } from '@/store/authStore';
 import '../../calendar/components/TimelineResourceGrid.css';
 
 type SelectedSlot = {
@@ -72,6 +73,7 @@ const StaffCourtsPage: React.FC = () => {
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [staffInfo, setStaffInfo] = useState<{ name: string; phone: string } | null>(null);
   const queryClient = useQueryClient();
+  const { user } = useAuthStore(); // ✅ Get current staff user
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -346,6 +348,7 @@ paymentMethod
             onSlotToggle={handleSlotToggle}
             selectedSlots={selectedSlots}
             isLoading={courtsLoading || bookingsLoading}
+            currentUserId={user?.id} // ✅ Pass staff user ID
             userRole="STAFF"
           />
         </div>
